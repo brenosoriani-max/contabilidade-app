@@ -1,0 +1,376 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Usuario {
+  id           Int            @id @default(autoincrement())
+  nome         String         @db.VarChar(255)
+  email        String         @unique @db.VarChar(255)
+  senha        String         @db.VarChar(255)
+  role         UsuarioRole    @default(contador)
+  avatar       String?        @db.VarChar(500)
+  telefone     String?        @db.VarChar(20)
+  cargo        String?        @db.VarChar(100)
+  ativo        Boolean        @default(true)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  agendamentos Agendamento[]
+  logs         LogAtividade[]
+
+  @@map("usuarios")
+}
+
+model Contribuinte {
+  id                  Int           @id @default(autoincrement())
+  cpf                 String        @unique @db.VarChar(14)
+  nome                String        @db.VarChar(255)
+  dataNascimento      DateTime?     @map("data_nascimento") @db.Date
+  tituloEleitor       String?       @map("titulo_eleitor") @db.VarChar(20)
+  enderecoCep         String?       @map("endereco_cep") @db.VarChar(10)
+  enderecoUf          String?       @map("endereco_uf") @db.VarChar(2)
+  enderecoMunicipio   String?       @map("endereco_municipio") @db.VarChar(100)
+  enderecoBairro      String?       @map("endereco_bairro") @db.VarChar(100)
+  enderecoLogradouro  String?       @map("endereco_logradouro") @db.VarChar(255)
+  enderecoNumero      String?       @map("endereco_numero") @db.VarChar(20)
+  enderecoComplemento String?       @map("endereco_complemento") @db.VarChar(100)
+  telefone            String?       @db.VarChar(20)
+  email               String?       @db.VarChar(255)
+  ocupacaoPrincipal   String?       @map("ocupacao_principal") @db.VarChar(100)
+  naturezaOcupacao    String?       @map("natureza_ocupacao") @db.VarChar(100)
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt           DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  agendamentos        Agendamento[]
+  alertas             Alerta[]
+  declaracoes         Declaracao[]
+
+  @@index([cpf], map: "idx_contribuintes_cpf")
+  @@map("contribuintes")
+}
+
+model Declaracao {
+  id                          Int                    @id @default(autoincrement())
+  contribuinteId              Int                    @map("contribuinte_id")
+  anoExercicio                Int                    @map("ano_exercicio")
+  anoCalendario               Int                    @map("ano_calendario")
+  tipoDeclaracao              TipoDeclaracao         @default(original) @map("tipo_declaracao")
+  modelo                      ModeloDeclaracao       @default(completo)
+  situacao                    SituacaoDeclaracao     @default(em_preenchimento)
+  totalRendimentosTributaveis Decimal                @default(0.00) @map("total_rendimentos_tributaveis") @db.Decimal(15, 2)
+  totalRendimentosIsentos     Decimal                @default(0.00) @map("total_rendimentos_isentos") @db.Decimal(15, 2)
+  totalRendimentosExclusivos  Decimal                @default(0.00) @map("total_rendimentos_exclusivos") @db.Decimal(15, 2)
+  totalDeducoes               Decimal                @default(0.00) @map("total_deducoes") @db.Decimal(15, 2)
+  baseCalculo                 Decimal                @default(0.00) @map("base_calculo") @db.Decimal(15, 2)
+  impostoDevido               Decimal                @default(0.00) @map("imposto_devido") @db.Decimal(15, 2)
+  impostoPago                 Decimal                @default(0.00) @map("imposto_pago") @db.Decimal(15, 2)
+  impostoRestituir            Decimal                @default(0.00) @map("imposto_restituir") @db.Decimal(15, 2)
+  impostoPagar                Decimal                @default(0.00) @map("imposto_pagar") @db.Decimal(15, 2)
+  totalBens                   Decimal                @default(0.00) @map("total_bens") @db.Decimal(15, 2)
+  totalDividas                Decimal                @default(0.00) @map("total_dividas") @db.Decimal(15, 2)
+  numeroRecibo                String?                @map("numero_recibo") @db.VarChar(50)
+  hashDeclaracao              String?                @map("hash_declaracao") @db.VarChar(100)
+  dataTransmissao             DateTime?              @map("data_transmissao") @db.DateTime(0)
+  xmlOriginal                 String?                @map("xml_original") @db.LongText
+  dadosJson                   String?                @map("dados_json") @db.LongText
+  createdAt                   DateTime               @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt                   DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  alertas                     Alerta[]
+  bensDireitos                BemDireito[]
+  contribuinte                Contribuinte           @relation(fields: [contribuinteId], references: [id], onDelete: Cascade)
+  deducoes                    Deducao[]
+  dependentes                 Dependente[]
+  dividasOnus                 DividaOnus[]
+  rendimentosIsentos          RendimentoIsento[]
+  rendimentosTributaveis      RendimentoTributavel[]
+
+  @@unique([contribuinteId, anoExercicio, tipoDeclaracao], map: "unique_declaracao")
+  @@index([anoExercicio], map: "idx_declaracoes_ano")
+  @@index([contribuinteId], map: "idx_declaracoes_contribuinte")
+  @@map("declaracoes")
+}
+
+model RendimentoTributavel {
+  id               Int        @id @default(autoincrement())
+  declaracaoId     Int        @map("declaracao_id")
+  tipo             String?    @db.VarChar(100)
+  cnpjFonte        String?    @map("cnpj_fonte") @db.VarChar(18)
+  nomeFonte        String?    @map("nome_fonte") @db.VarChar(255)
+  valorRendimento  Decimal    @default(0.00) @map("valor_rendimento") @db.Decimal(15, 2)
+  valorPrevidencia Decimal    @default(0.00) @map("valor_previdencia") @db.Decimal(15, 2)
+  valorIrrf        Decimal    @default(0.00) @map("valor_irrf") @db.Decimal(15, 2)
+  valor13o         Decimal    @default(0.00) @map("valor_13o") @db.Decimal(15, 2)
+  irrf13o          Decimal    @default(0.00) @map("irrf_13o") @db.Decimal(15, 2)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  declaracao       Declaracao @relation(fields: [declaracaoId], references: [id], onDelete: Cascade)
+
+  @@index([declaracaoId], map: "rendimentos_tributaveis_declaracao_id_fkey")
+  @@map("rendimentos_tributaveis")
+}
+
+model RendimentoIsento {
+  id           Int        @id @default(autoincrement())
+  declaracaoId Int        @map("declaracao_id")
+  tipo         String?    @db.VarChar(100)
+  codigo       Int?
+  descricao    String?    @db.VarChar(255)
+  cnpjFonte    String?    @map("cnpj_fonte") @db.VarChar(18)
+  nomeFonte    String?    @map("nome_fonte") @db.VarChar(255)
+  valor        Decimal    @default(0.00) @db.Decimal(15, 2)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  declaracao   Declaracao @relation(fields: [declaracaoId], references: [id], onDelete: Cascade)
+
+  @@index([declaracaoId], map: "rendimentos_isentos_declaracao_id_fkey")
+  @@map("rendimentos_isentos")
+}
+
+model Deducao {
+  id                  Int        @id @default(autoincrement())
+  declaracaoId        Int        @map("declaracao_id")
+  tipo                String?    @db.VarChar(100)
+  codigo              Int?
+  descricao           String?    @db.VarChar(255)
+  cpfCnpjBeneficiario String?    @map("cpf_cnpj_beneficiario") @db.VarChar(18)
+  nomeBeneficiario    String?    @map("nome_beneficiario") @db.VarChar(255)
+  valor               Decimal    @default(0.00) @db.Decimal(15, 2)
+  valorReembolso      Decimal    @default(0.00) @map("valor_reembolso") @db.Decimal(15, 2)
+  valorDedutivel      Decimal    @default(0.00) @map("valor_dedutivel") @db.Decimal(15, 2)
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  declaracao          Declaracao @relation(fields: [declaracaoId], references: [id], onDelete: Cascade)
+
+  @@index([declaracaoId], map: "deducoes_declaracao_id_fkey")
+  @@map("deducoes")
+}
+
+model BemDireito {
+  id            Int        @id @default(autoincrement())
+  declaracaoId  Int        @map("declaracao_id")
+  grupo         Int?
+  codigo        Int?
+  descricao     String?    @db.Text
+  localizacao   String?    @db.VarChar(10)
+  valorAnterior Decimal    @default(0.00) @map("valor_anterior") @db.Decimal(15, 2)
+  valorAtual    Decimal    @default(0.00) @map("valor_atual") @db.Decimal(15, 2)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  declaracao    Declaracao @relation(fields: [declaracaoId], references: [id], onDelete: Cascade)
+
+  @@index([declaracaoId], map: "bens_direitos_declaracao_id_fkey")
+  @@map("bens_direitos")
+}
+
+model DividaOnus {
+  id            Int        @id @default(autoincrement())
+  declaracaoId  Int        @map("declaracao_id")
+  codigo        Int?
+  descricao     String?    @db.Text
+  cnpjCredor    String?    @map("cnpj_credor") @db.VarChar(18)
+  nomeCredor    String?    @map("nome_credor") @db.VarChar(255)
+  valorAnterior Decimal    @default(0.00) @map("valor_anterior") @db.Decimal(15, 2)
+  valorAtual    Decimal    @default(0.00) @map("valor_atual") @db.Decimal(15, 2)
+  valorPago     Decimal    @default(0.00) @map("valor_pago") @db.Decimal(15, 2)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  declaracao    Declaracao @relation(fields: [declaracaoId], references: [id], onDelete: Cascade)
+
+  @@index([declaracaoId], map: "dividas_onus_declaracao_id_fkey")
+  @@map("dividas_onus")
+}
+
+model Dependente {
+  id             Int        @id @default(autoincrement())
+  declaracaoId   Int        @map("declaracao_id")
+  tipo           Int?
+  cpf            String?    @db.VarChar(14)
+  nome           String?    @db.VarChar(255)
+  dataNascimento DateTime?  @map("data_nascimento") @db.Date
+  relacao        String?    @db.VarChar(100)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  declaracao     Declaracao @relation(fields: [declaracaoId], references: [id], onDelete: Cascade)
+
+  @@index([declaracaoId], map: "dependentes_declaracao_id_fkey")
+  @@map("dependentes")
+}
+
+model Agendamento {
+  id              Int                    @id @default(autoincrement())
+  contribuinteId  Int?                   @map("contribuinte_id")
+  usuarioId       Int?                   @map("usuario_id")
+  titulo          String                 @db.VarChar(255)
+  descricao       String?                @db.Text
+  dataAgendamento DateTime               @map("data_agendamento") @db.Date
+  horaInicio      DateTime?              @map("hora_inicio") @db.Time(0)
+  horaFim         DateTime?              @map("hora_fim") @db.Time(0)
+  tipo            TipoAgendamento        @default(declaracao)
+  status          StatusAgendamento      @default(agendado)
+  observacoes     String?                @db.Text
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  contribuinte    Contribuinte?          @relation(fields: [contribuinteId], references: [id])
+  usuario         Usuario?               @relation(fields: [usuarioId], references: [id])
+  checklist        ChecklistAgendamento[]
+  documentos      DocumentoAgendamento[]
+  envioLink        LinkEnvioAgendamento?
+
+  @@index([dataAgendamento], map: "idx_agendamentos_data")
+  @@index([contribuinteId], map: "agendamentos_contribuinte_id_fkey")
+  @@index([usuarioId], map: "agendamentos_usuario_id_fkey")
+  @@map("agendamentos")
+}
+
+model ChecklistAgendamento {
+  id            Int                     @id @default(autoincrement())
+  agendamentoId Int                     @map("agendamento_id")
+  chave         String                  @db.VarChar(80)
+  nome          String                  @db.VarChar(255)
+  status        StatusChecklistDocumento @default(pendente)
+  ordem         Int                     @default(0)
+  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt     DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  agendamento   Agendamento             @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
+  documentos    DocumentoAgendamento[]
+
+  @@unique([agendamentoId, chave], map: "unique_checklist_agendamento_chave")
+  @@index([agendamentoId], map: "checklist_agendamento_agendamento_id_fkey")
+  @@map("checklist_agendamento")
+}
+
+model DocumentoAgendamento {
+  id              Int                    @id @default(autoincrement())
+  agendamentoId   Int                    @map("agendamento_id")
+  checklistItemId Int?                   @map("checklist_item_id")
+  checklistItemKey String?               @map("checklist_item_key") @db.VarChar(80)
+  nomeArquivo     String                 @map("nome_arquivo") @db.VarChar(255)
+  tipoArquivo     String?                @map("tipo_arquivo") @db.VarChar(100)
+  tamanhoBytes    Int?                   @map("tamanho_bytes")
+  caminhoArquivo  String?                @map("caminho_arquivo") @db.VarChar(500)
+  urlArquivo      String?                @map("url_arquivo") @db.VarChar(500)
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamp(0)
+  agendamento     Agendamento            @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
+  checklistItem   ChecklistAgendamento?  @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+
+  @@index([agendamentoId], map: "documentos_agendamento_agendamento_id_fkey")
+  @@index([checklistItemId], map: "documentos_agendamento_checklist_item_id_fkey")
+  @@map("documentos_agendamento")
+}
+
+model LinkEnvioAgendamento {
+  id            Int         @id @default(autoincrement())
+  agendamentoId Int         @unique @map("agendamento_id")
+  token         String      @unique @db.VarChar(64)
+  expiresAt     DateTime    @map("expires_at") @db.DateTime(0)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt     DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  agendamento   Agendamento @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
+
+  @@index([token], map: "idx_links_envio_agendamento_token")
+  @@map("links_envio_agendamento")
+}
+
+model Alerta {
+  id             Int              @id @default(autoincrement())
+  contribuinteId Int?             @map("contribuinte_id")
+  declaracaoId   Int?             @map("declaracao_id")
+  tipo           TipoAlerta       @default(outro)
+  prioridade     PrioridadeAlerta @default(media)
+  titulo         String           @db.VarChar(255)
+  mensagem       String?          @db.Text
+  lido           Boolean          @default(false)
+  resolvido      Boolean          @default(false)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  contribuinte   Contribuinte?    @relation(fields: [contribuinteId], references: [id], onDelete: Cascade)
+  declaracao     Declaracao?      @relation(fields: [declaracaoId], references: [id], onDelete: Cascade)
+
+  @@index([contribuinteId], map: "idx_alertas_contribuinte")
+  @@index([declaracaoId], map: "alertas_declaracao_id_fkey")
+  @@map("alertas")
+}
+
+model LogAtividade {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int?     @map("usuario_id")
+  acao       String   @db.VarChar(100)
+  entidade   String?  @db.VarChar(100)
+  entidadeId Int?     @map("entidade_id")
+  detalhes   String?  @db.Text
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  usuario    Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@index([usuarioId], map: "log_atividades_usuario_id_fkey")
+  @@map("log_atividades")
+}
+
+model ConfiguracaoSistema {
+  id           Int      @id @default(autoincrement())
+  nomeEmpresa  String?  @map("nome_empresa") @db.VarChar(255)
+  cnpjEmpresa  String?  @map("cnpj_empresa") @db.VarChar(20)
+  emailSuporte String?  @map("email_suporte") @db.VarChar(255)
+  corTema      String?  @map("cor_tema") @db.VarChar(20)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  @@map("configuracao_sistema")
+}
+
+enum UsuarioRole {
+  admin
+  contador
+  assistente
+}
+
+enum TipoDeclaracao {
+  original
+  retificadora
+}
+
+enum ModeloDeclaracao {
+  completo
+  simplificado
+}
+
+enum SituacaoDeclaracao {
+  em_preenchimento
+  transmitida
+  processada
+  pendente
+  malha
+}
+
+enum TipoAgendamento {
+  declaracao
+  consultoria
+  revisao
+  entrega_documentos
+  outro
+}
+
+enum StatusAgendamento {
+  agendado
+  confirmado
+  em_andamento
+  concluido
+  cancelado
+}
+
+enum StatusChecklistDocumento {
+  pendente
+  recebido
+  nao_aplica
+}
+
+enum TipoAlerta {
+  prazo
+  pendencia
+  malha
+  documento
+  outro
+}
+
+enum PrioridadeAlerta {
+  baixa
+  media
+  alta
+  urgente
+}
