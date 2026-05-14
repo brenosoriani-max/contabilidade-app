@@ -244,7 +244,9 @@ export interface XMLImportResult {
     success: boolean;
     error?: string;
     contribuinteId?: number;
+    declaracaoId?: number;
     nome?: string;
-    cpf?: string;
+    cpf?: string | null;
+    cpfTemporario?: boolean;
   }>;
 }

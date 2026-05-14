@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+
 import {
   Tabs,
   TabsContent,
@@ -231,8 +232,8 @@ export default function ImportarPage() {
                 ...fileState,
                 status: "success",
                 result: {
-                  cpf: result.cpf,
-                  nome: result.nome,
+                  cpf: result.cpf ?? undefined,
+                  nome: result.nome ?? undefined,
                   resultadoDeclaracao: null,
                   impostoRestituir: 0,
                   saldoPagar: 0,
@@ -420,7 +421,8 @@ export default function ImportarPage() {
                       </CardDescription>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-col items-end gap-3">
+                      <div className="flex gap-2">
                       <Button
                         variant="outline"
                         onClick={clearAll}
@@ -450,6 +452,7 @@ export default function ImportarPage() {
                           </>
                         )}
                       </Button>
+                    </div>
                     </div>
                   </div>
                 </CardHeader>

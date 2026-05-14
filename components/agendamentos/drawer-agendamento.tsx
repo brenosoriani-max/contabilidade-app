@@ -20,6 +20,7 @@ import useSWR from "swr";
 import { ChecklistDocumentos } from "@/components/agendamentos/checklist-documentos";
 import { LinkEnvioCliente } from "@/components/agendamentos/link-envio-cliente";
 import { UploadDocumentos } from "@/components/agendamentos/upload-documentos";
+import { DeclaracaoIrpfAssistente } from "@/components/declaracao-irpf-assistente";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,7 +46,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { schedulingService } from "@/lib/api/services";
+import { schedulingService, contribuinteService } from "@/lib/api/services";
 import { formatCPF, getStatusColor, getStatusLabel } from "@/lib/format";
 import { getProgressTone } from "@/lib/scheduling-checklist";
 import type {
@@ -107,6 +108,16 @@ export function DrawerAgendamento({
   );
 
   const detail = data?.agendamento ?? scheduling;
+
+  const { data: contribData } = useSWR(
+    open && detail?.contribuinteId
+      ? ["contribuinte-irpf", detail.contribuinteId]
+      : null,
+    () => contribuinteService.get(detail!.contribuinteId as number),
+    { revalidateOnFocus: false }
+  );
+
+  const declaracaoIrpfId = contribData?.declaracoes?.[0]?.id;
 
   useEffect(() => {
     if (!detail || checklistDirty) return;
@@ -227,10 +238,11 @@ export function DrawerAgendamento({
               ) : (
                 <Tabs defaultValue="resumo" className="min-h-0 flex-1 gap-0">
                   <div className="border-b px-6 py-3">
-                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-5">
                       <TabsTrigger value="resumo">Resumo</TabsTrigger>
-                      <TabsTrigger value="documentos">Documentos</TabsTrigger>
-                      <TabsTrigger value="checklist">Checklist IR</TabsTrigger>
+                      <TabsTrigger value="documentos">Docs</TabsTrigger>
+                      <TabsTrigger value="checklist">Checklist</TabsTrigger>
+                      <TabsTrigger value="assistente">Assistente</TabsTrigger>
                       <TabsTrigger value="historico">Historico</TabsTrigger>
                     </TabsList>
                   </div>
@@ -308,6 +320,28 @@ export function DrawerAgendamento({
                         onChange={updateChecklistDraft}
                         onSave={saveChecklist}
                       />
+                    </TabsContent>
+
+                    <TabsContent value="assistente" className="mt-0 space-y-4">
+                      {!detail.contribuinteId ? (
+                        <p className="text-sm text-muted-foreground">
+                          Vincule um contribuinte ao agendamento para usar o
+                          assistente IRPF.
+                        </p>
+                      ) : !declaracaoIrpfId ? (
+                        <p className="text-sm text-muted-foreground">
+                          Nenhuma declaração encontrada para este contribuinte.
+                          Importe um XML na tela de importação primeiro.
+                        </p>
+                      ) : (
+                        <DeclaracaoIrpfAssistente
+                          declaracaoId={declaracaoIrpfId}
+                          anoExercicio={
+                            contribData?.declaracoes?.[0]?.anoExercicio
+                          }
+                          agendamentoId={detail.id}
+                        />
+                      )}
                     </TabsContent>
 
                     <TabsContent value="historico" className="mt-0">

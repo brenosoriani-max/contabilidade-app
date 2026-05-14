@@ -126,6 +126,57 @@ export const importService = {
   },
 };
 
+export const declaracaoIrpfService = {
+  importarXml(declaracaoId: number, file: File, anoExercicio?: number) {
+    const formData = new FormData();
+    formData.append('xml', file);
+    if (anoExercicio != null) {
+      formData.append('anoExercicio', String(anoExercicio));
+    }
+    return unwrap<{ sucesso: boolean; declaracaoId: number }>(
+      api.post(`/declaracoes/${declaracaoId}/importar-xml`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    );
+  },
+
+  uploadDocumento(
+    declaracaoId: number,
+    file: File,
+    tag: string,
+    agendamentoId?: number | null,
+    origem?: 'contador' | 'cliente_link'
+  ) {
+    const formData = new FormData();
+    formData.append('arquivo', file);
+    formData.append('tag', tag);
+    if (agendamentoId) {
+      formData.append('agendamentoId', String(agendamentoId));
+    }
+    if (origem) {
+      formData.append('origem', origem);
+    }
+    return unwrap<{ sucesso: boolean; resumo: Record<string, unknown>; modelo: unknown }>(
+      api.post(`/declaracoes/${declaracaoId}/documento`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    );
+  },
+
+  putCampo(
+    declaracaoId: number,
+    body: { campo: string; valor: string; editadoPor?: string }
+  ) {
+    return unwrap<{ sucesso: boolean; valorNormalizado: string | null }>(
+      api.put(`/declaracoes/${declaracaoId}/campo`, body)
+    );
+  },
+
+  getChecklist(declaracaoId: number) {
+    return unwrap<Record<string, unknown>>(api.get(`/declaracoes/${declaracaoId}/checklist`));
+  },
+};
+
 export const configuracaoService = {
   get: () => unwrap<{ configuracoes: any }>(api.get('/configuracoes')),
   update: (data: Record<string, unknown>) =>

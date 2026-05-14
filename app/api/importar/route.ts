@@ -6,6 +6,10 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { fail, ok } from '@/lib/server/api';
 import { requireAuth } from '@/lib/server/auth';
+import {
+  serializeEnvelope,
+  wrapLegacyXmlAsEnvelope,
+} from '@/lib/server/dados-json-declaracao';
 
 const parseXml = promisify(parseString);
 
@@ -88,7 +92,7 @@ export async function POST(request: NextRequest) {
       return fail('Nenhum arquivo enviado', 400);
     }
 
-    const results = [];
+    const results: Array<Record<string, unknown>> = [];
 
     for (const file of files) {
       try {
@@ -273,7 +277,7 @@ export async function POST(request: NextRequest) {
         // PERSISTÊNCIA
         // ─────────────────────────────────────
 
-        const imported = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const importTx = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
               // CONTRIBUINTE
 
               const contribuinte =
@@ -402,10 +406,13 @@ export async function POST(request: NextRequest) {
                     xmlOriginal:
                       content,
 
-                    dadosJson:
-                      JSON.stringify(
-                        xml
-                      ),
+                    dadosJson: serializeEnvelope(
+                      wrapLegacyXmlAsEnvelope(
+                        xml as Record<string, unknown>,
+                        undefined,
+                        {}
+                      )
+                    ),
                   },
 
                   update: {
@@ -429,10 +436,13 @@ export async function POST(request: NextRequest) {
                     xmlOriginal:
                       content,
 
-                    dadosJson:
-                      JSON.stringify(
-                        xml
-                      ),
+                    dadosJson: serializeEnvelope(
+                      wrapLegacyXmlAsEnvelope(
+                        xml as Record<string, unknown>,
+                        undefined,
+                        {}
+                      )
+                    ),
                   },
                 });
 
@@ -543,9 +553,14 @@ export async function POST(request: NextRequest) {
                 );
               }
 
-              return contribuinte;
+              return {
+                contribuinte,
+                declaracaoRecord,
+              };
             }
           );
+
+        const importedContrib = importTx.contribuinte;
 
         // ─────────────────────────────────────
         // RESULTADO
@@ -557,12 +572,14 @@ export async function POST(request: NextRequest) {
           success: true,
 
           contribuinteId:
-            imported.id,
+            importedContrib.id,
 
-          nome: imported.nome,
+          declaracaoId: importTx.declaracaoRecord.id,
+
+          nome: importedContrib.nome,
 
           cpf: isCpfValid
-            ? imported.cpf
+            ? importedContrib.cpf
             : null,
 
           cpfTemporario:

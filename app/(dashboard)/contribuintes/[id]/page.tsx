@@ -31,6 +31,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 import { contribuinteService } from "@/lib/api/services"
 
+import { DeclaracaoIrpfAssistente } from "@/components/declaracao-irpf-assistente"
+
 import type {
   BemDireito,
   ContribuinteSummary,
@@ -236,15 +238,26 @@ export default function ContribuintePage() {
                   </div>
                 </div>
               ) : contribuinte ? (
-                <ContribuinteDetails
-                  contribuinte={
-                    contribuinte
-                  }
-                  declaration={
-                    declaration
-                  }
-                  assets={assets}
-                />
+                <div className="space-y-6">
+                  <ContribuinteDetails
+                    contribuinte={
+                      contribuinte
+                    }
+                    declaration={
+                      declaration
+                    }
+                    assets={assets}
+                  />
+
+                  {declaration?.id ? (
+                    <DeclaracaoIrpfAssistente
+                      declaracaoId={declaration.id}
+                      anoExercicio={
+                        declaration.anoExercicio
+                      }
+                    />
+                  ) : null}
+                </div>
               ) : (
                 <div className="rounded-2xl border border-dashed p-8 text-center">
                   <p className="text-muted-foreground">

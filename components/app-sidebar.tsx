@@ -11,7 +11,8 @@ import {
   Shield,
   LogOut,
   User,
-  FileText
+  FileText,
+  ListChecks,
 } from "lucide-react"
 import {
   Sidebar,
@@ -46,6 +47,11 @@ const navItems = [
     title: "Contribuintes",
     url: "/contribuintes",
     icon: Users,
+  },
+  {
+    title: "IRPF",
+    url: "/irpf",
+    icon: ListChecks,
   },
   {
     title: "Importar XML",
