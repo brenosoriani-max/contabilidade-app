@@ -16,6 +16,97 @@ import {
 } from '@/lib/server/scheduling-details';
 import type { DadosJsonEnvelopeV2 } from '@/lib/server/dados-json-declaracao';
 
+/**
+ * Map of document tags to contribuinte fields they can update.
+ * Each tag lists which formData fields to look for and which
+ * Contribuinte columns they map to.
+ */
+const TAG_FIELD_MAP: Record<string, { formKey: string; dbKey: string; parse?: 'date' }[]> = {
+  'RG / CNH': [
+    { formKey: 'dataNascimento', dbKey: 'dataNascimento', parse: 'date' },
+  ],
+  'Título de Eleitor': [
+    { formKey: 'tituloEleitor', dbKey: 'tituloEleitor' },
+  ],
+  'Titulo de Eleitor': [
+    { formKey: 'tituloEleitor', dbKey: 'tituloEleitor' },
+  ],
+  'CPF': [
+    { formKey: 'dataNascimento', dbKey: 'dataNascimento', parse: 'date' },
+  ],
+  'Comprovante de residência': [
+    { formKey: 'enderecoCep', dbKey: 'enderecoCep' },
+    { formKey: 'enderecoUf', dbKey: 'enderecoUf' },
+    { formKey: 'enderecoMunicipio', dbKey: 'enderecoMunicipio' },
+    { formKey: 'enderecoBairro', dbKey: 'enderecoBairro' },
+    { formKey: 'enderecoLogradouro', dbKey: 'enderecoLogradouro' },
+    { formKey: 'enderecoNumero', dbKey: 'enderecoNumero' },
+    { formKey: 'enderecoComplemento', dbKey: 'enderecoComplemento' },
+  ],
+  'Comprovante de residencia': [
+    { formKey: 'enderecoCep', dbKey: 'enderecoCep' },
+    { formKey: 'enderecoUf', dbKey: 'enderecoUf' },
+    { formKey: 'enderecoMunicipio', dbKey: 'enderecoMunicipio' },
+    { formKey: 'enderecoBairro', dbKey: 'enderecoBairro' },
+    { formKey: 'enderecoLogradouro', dbKey: 'enderecoLogradouro' },
+    { formKey: 'enderecoNumero', dbKey: 'enderecoNumero' },
+    { formKey: 'enderecoComplemento', dbKey: 'enderecoComplemento' },
+  ],
+  'Informe de rendimentos': [
+    { formKey: 'ocupacaoPrincipal', dbKey: 'ocupacaoPrincipal' },
+    { formKey: 'naturezaOcupacao', dbKey: 'naturezaOcupacao' },
+  ],
+  'Extrato bancário': [
+    { formKey: 'telefone', dbKey: 'telefone' },
+    { formKey: 'email', dbKey: 'email' },
+  ],
+  'Carnê-leão / Recibo autônomo': [
+    { formKey: 'ocupacaoPrincipal', dbKey: 'ocupacaoPrincipal' },
+    { formKey: 'naturezaOcupacao', dbKey: 'naturezaOcupacao' },
+  ],
+};
+
+/**
+ * Updates the Contribuinte record with data extracted from uploaded documents.
+ * Uses the TAG_FIELD_MAP to determine which fields to extract from formData for each tag.
+ */
+async function updateContribuinteFromDocument(
+  contribuinteId: number,
+  tag: string,
+  formData: FormData
+) {
+  const fieldDefs = TAG_FIELD_MAP[tag];
+  if (!fieldDefs || fieldDefs.length === 0) {
+    return { updated: false, fields: [] };
+  }
+
+  const updates: Record<string, unknown> = {};
+
+  for (const def of fieldDefs) {
+    const raw = formData.get(def.formKey);
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+
+    if (def.parse === 'date') {
+      const parsed = new Date(raw.trim());
+      if (!isNaN(parsed.getTime())) {
+        updates[def.dbKey] = parsed;
+      }
+    } else {
+      updates[def.dbKey] = raw.trim();
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await prisma.contribuinte.update({
+      where: { id: contribuinteId },
+      data: updates,
+    });
+    return { updated: true, fields: Object.keys(updates) };
+  }
+
+  return { updated: false, fields: [] };
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -66,6 +157,16 @@ export async function POST(
         'Formato nao suportado. Envie imagem (JPEG/PNG) ou PDF.',
         400
       );
+    }
+
+    // Load the declaration to get contribuinteId
+    const decl = await prisma.declaracao.findUnique({
+      where: { id: declaracaoId },
+      select: { contribuinteId: true },
+    });
+
+    if (!decl) {
+      return fail('Declaracao nao encontrada', 404);
     }
 
     const { envelope, modelo } = await loadModeloForDeclaracao(declaracaoId);
@@ -128,7 +229,19 @@ export async function POST(
 
     await persistModeloEnvelope(declaracaoId, modelo, nextEnvelope);
 
-    return ok({ sucesso: true, resumo, modelo });
+    // Auto-update contribuinte record based on document type
+    const contribuinteUpdate = await updateContribuinteFromDocument(
+      decl.contribuinteId,
+      tag,
+      formData
+    );
+
+    return ok({
+      sucesso: true,
+      resumo,
+      modelo,
+      contribuinteAtualizado: contribuinteUpdate,
+    });
   } catch (e) {
     console.error('documento declaracao:', e);
     const msg = e instanceof Error ? e.message : 'Erro interno';

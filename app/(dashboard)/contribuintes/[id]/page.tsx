@@ -31,8 +31,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 import { contribuinteService } from "@/lib/api/services"
 
-import { DeclaracaoIrpfAssistente } from "@/components/declaracao-irpf-assistente"
-
 import type {
   BemDireito,
   ContribuinteSummary,
@@ -68,7 +66,6 @@ interface ApiResponse {
 
 export default function ContribuintePage() {
   const params = useParams()
-
   const router = useRouter()
 
   const contribuinteId = useMemo(
@@ -76,29 +73,14 @@ export default function ContribuintePage() {
     [params.id]
   )
 
-  const [loading, setLoading] =
-    useState(true)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [contribuinte, setContribuinte] = useState<ContribuinteSummary | null>(null)
+  const [declaration, setDeclaration] = useState<Declaration | null>(null)
+  const [assets, setAssets] = useState<BemDireito[]>([])
 
-  const [refreshing, setRefreshing] =
-    useState(false)
-
-  const [error, setError] =
-    useState<string | null>(null)
-
-  const [contribuinte, setContribuinte] =
-    useState<ContribuinteSummary | null>(
-      null
-    )
-
-  const [declaration, setDeclaration] =
-    useState<Declaration | null>(null)
-
-  const [assets, setAssets] =
-    useState<BemDireito[]>([])
-
-  async function loadData(
-    isRefresh = false
-  ) {
+  async function loadData(isRefresh = false) {
     try {
       if (isRefresh) {
         setRefreshing(true)
@@ -109,51 +91,29 @@ export default function ContribuintePage() {
       setError(null)
 
       const payload: ApiResponse =
-        await contribuinteService.get(
-          contribuinteId
-        )
+        await contribuinteService.get(contribuinteId)
 
       if (!payload) {
-        throw new Error(
-          "Nenhum dado retornado pela API"
-        )
+        throw new Error("Nenhum dado retornado pela API")
       }
 
-      const contribuinteData =
-        payload.contribuinte || null
-
-      const declarationData =
-        payload.declaracoes?.[0] || null
+      const contribuinteData = payload.contribuinte || null
+      const declarationData = payload.declaracoes?.[0] || null
 
       if (!contribuinteData) {
-        throw new Error(
-          "Contribuinte não encontrado"
-        )
+        throw new Error("Contribuinte não encontrado")
       }
 
-      setContribuinte(
-        contribuinteData
-      )
-
-      setDeclaration(
-        declarationData
-      )
-
+      setContribuinte(contribuinteData)
+      setDeclaration(declarationData)
       setAssets(
         Array.isArray(payload.bens)
           ? payload.bens
           : []
       )
     } catch (err: any) {
-      console.error(
-        "ERRO COMPLETO:",
-        err
-      )
-
-      setError(
-        err?.message ||
-          "Erro ao carregar dados"
-      )
+      console.error("ERRO COMPLETO:", err)
+      setError(err?.message || "Erro ao carregar dados")
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -162,7 +122,6 @@ export default function ContribuintePage() {
 
   useEffect(() => {
     if (!contribuinteId) return
-
     loadData()
   }, [contribuinteId])
 
@@ -178,11 +137,7 @@ export default function ContribuintePage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Button
               variant="outline"
-              onClick={() =>
-                router.push(
-                  "/contribuintes"
-                )
-              }
+              onClick={() => router.push("/contribuintes")}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Voltar
@@ -190,19 +145,11 @@ export default function ContribuintePage() {
 
             <Button
               variant="secondary"
-              disabled={
-                refreshing || loading
-              }
-              onClick={() =>
-                loadData(true)
-              }
+              disabled={refreshing || loading}
+              onClick={() => loadData(true)}
             >
               <RefreshCcw
-                className={`mr-2 h-4 w-4 ${
-                  refreshing
-                    ? "animate-spin"
-                    : ""
-                }`}
+                className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
               />
               Atualizar
             </Button>
@@ -222,42 +169,22 @@ export default function ContribuintePage() {
                     <h3 className="text-lg font-semibold text-red-600">
                       Erro ao carregar contribuinte
                     </h3>
-
-                    <p className="text-sm text-red-500">
-                      {error}
-                    </p>
-
+                    <p className="text-sm text-red-500">{error}</p>
                     <Button
                       className="mt-4"
-                      onClick={() =>
-                        loadData()
-                      }
+                      onClick={() => loadData()}
                     >
                       Tentar novamente
                     </Button>
                   </div>
                 </div>
               ) : contribuinte ? (
-                <div className="space-y-6">
-                  <ContribuinteDetails
-                    contribuinte={
-                      contribuinte
-                    }
-                    declaration={
-                      declaration
-                    }
-                    assets={assets}
-                  />
-
-                  {declaration?.id ? (
-                    <DeclaracaoIrpfAssistente
-                      declaracaoId={declaration.id}
-                      anoExercicio={
-                        declaration.anoExercicio
-                      }
-                    />
-                  ) : null}
-                </div>
+                <ContribuinteDetails
+                  contribuinte={contribuinte}
+                  declaration={declaration}
+                  assets={assets}
+                  onDataRefresh={() => loadData(true)}
+                />
               ) : (
                 <div className="rounded-2xl border border-dashed p-8 text-center">
                   <p className="text-muted-foreground">

@@ -9,6 +9,7 @@ import type {
   SafeUser,
   Scheduling,
   XMLImportResult,
+  Checklist,
 } from '@/types';
 
 export const authService = {
@@ -145,7 +146,8 @@ export const declaracaoIrpfService = {
     file: File,
     tag: string,
     agendamentoId?: number | null,
-    origem?: 'contador' | 'cliente_link'
+    origem?: 'contador' | 'cliente_link',
+    extraFields?: Record<string, string>
   ) {
     const formData = new FormData();
     formData.append('arquivo', file);
@@ -156,7 +158,12 @@ export const declaracaoIrpfService = {
     if (origem) {
       formData.append('origem', origem);
     }
-    return unwrap<{ sucesso: boolean; resumo: Record<string, unknown>; modelo: unknown }>(
+    if (extraFields) {
+      for (const [key, value] of Object.entries(extraFields)) {
+        if (value) formData.append(key, value);
+      }
+    }
+    return unwrap<{ sucesso: boolean; resumo: Record<string, unknown>; modelo: unknown; contribuinteAtualizado?: { updated: boolean; fields: string[] } }>(
       api.post(`/declaracoes/${declaracaoId}/documento`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
@@ -173,7 +180,7 @@ export const declaracaoIrpfService = {
   },
 
   getChecklist(declaracaoId: number) {
-    return unwrap<Record<string, unknown>>(api.get(`/declaracoes/${declaracaoId}/checklist`));
+    return unwrap<Checklist>(api.get(`/declaracoes/${declaracaoId}/checklist`));
   },
 };
 

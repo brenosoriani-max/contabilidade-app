@@ -250,3 +250,8 @@ export interface XMLImportResult {
     cpfTemporario?: boolean;
   }>;
 }
+export interface Checklist {
+  percentual_completo: number;
+  proxima_acao?: string;
+  [key: string]: any;
+}
