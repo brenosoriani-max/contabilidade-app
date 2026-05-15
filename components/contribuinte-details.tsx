@@ -1,6 +1,7 @@
 "use client"
 
 import React, {
+  Fragment,
   ReactNode,
   useCallback,
   useMemo,
@@ -164,31 +165,11 @@ const PIPELINE_ORDER = [
 ];
 
 const PIPELINE_STEPS = [
-  {
-    label: "XML importado",
-    sublabel: "Dados da Receita",
-    icon: <FileDown className="h-3.5 w-3.5" />,
-  },
-  {
-    label: "Coletando docs",
-    sublabel: "Documentos do cliente",
-    icon: <FolderOpen className="h-3.5 w-3.5" />,
-  },
-  {
-    label: "Revisão",
-    sublabel: "Conferência contador",
-    icon: <ClipboardList className="h-3.5 w-3.5" />,
-  },
-  {
-    label: "Pronto p/ envio",
-    sublabel: "Exportar .DEC",
-    icon: <FileCheck className="h-3.5 w-3.5" />,
-  },
-  {
-    label: "Entregue",
-    sublabel: "Transmitido na Receita",
-    icon: <BadgeCheck className="h-3.5 w-3.5" />,
-  },
+  { label: "XML importado" },
+  { label: "Coletando docs" },
+  { label: "Revisão" },
+  { label: "Pronto p/ envio" },
+  { label: "Entregue" },
 ];
 
 function Field({ 
@@ -691,7 +672,7 @@ export const ContribuinteDetails = React.memo(
  
           {/* DECLARACAO PIPELINE */}
           <div className="w-full px-2">
-            <div className="relative flex items-start">
+            <div className="flex flex-wrap items-center justify-center gap-4 py-3">
               {(() => {
                 const statusPipeline = checklist?.status_pipeline || declaration?.statusPipeline || "pendente";
                 const currentIndex = PIPELINE_ORDER.indexOf(statusPipeline);
@@ -704,82 +685,22 @@ export const ContribuinteDetails = React.memo(
 
                   const isLast = idx === PIPELINE_STEPS.length - 1;
 
-                  // Dynamic navigation mapping
-                  const targetTabs = ["geral", "documentos", "checklist", "geral", "geral"];
-
                   return (
-                    <div key={idx} className="relative flex flex-1 flex-col items-center">
-                      {/* Connector line */}
-                      {!isLast && (
-                        <div className="absolute left-1/2 top-[13px] h-[2px] w-full z-0">
-                          <div
-                            className={cn(
-                              "h-full w-full transition-all duration-700",
-                              status === "done" ? "bg-emerald-500" : "bg-muted"
-                            )}
-                          />
-                        </div>
-                      )}
-
-                      {/* Dot */}
-                      <div
+                    <Fragment key={idx}>
+                      <span
                         className={cn(
-                          "relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-500 cursor-pointer hover:scale-110",
-                          status === "done" && "border-emerald-500 bg-emerald-500 text-white",
-                          status === "active" && "border-primary bg-primary/10 text-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.12)] animate-pulse",
-                          status === "pending" && "border-muted bg-background text-muted-foreground/30"
+                          "text-[12px] font-black uppercase tracking-[0.25em] text-black",
+                          status === "pending" && "opacity-60"
                         )}
-                        onClick={() => handleTabChange(targetTabs[idx])}
                       >
-                        {status === "done" ? (
-                          <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                        ) : (
-                          step.icon
-                        )}
-                      </div>
+                        {step.label}
+                      </span>
 
-                      {/* Label block */}
-                      <div className="mt-2 flex flex-col items-center gap-0.5 text-center px-1">
-                        <span
-                          className={cn(
-                            "text-[9px] font-black uppercase tracking-widest leading-tight",
-                            status === "done" && "text-emerald-600",
-                            status === "active" && "text-primary",
-                            status === "pending" && "text-muted-foreground/30"
-                          )}
-                        >
-                          {step.label}
-                        </span>
-                        <span
-                          className={cn(
-                            "text-[8px] font-bold leading-tight",
-                            status === "pending" ? "text-muted-foreground/20" : "text-muted-foreground/50"
-                          )}
-                        >
-                          {step.sublabel}
-                        </span>
-                      </div>
-                    </div>
+                      {!isLast && <span className="text-[12px] text-black/40 px-2">→</span>}
+                    </Fragment>
                   );
                 })
               })()}
-            </div>
-            
-            {/* Minimal Progress Bar below pipeline */}
-            <div className="mt-4 flex items-center gap-3 px-4">
-              <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted/30">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all duration-700",
-                    (checklist?.percentual_completo ?? declaration?.percentualCompleto ?? 0) >= 95 ? "bg-emerald-500" :
-                    (checklist?.percentual_completo ?? declaration?.percentualCompleto ?? 0) >= 60 ? "bg-primary" : "bg-amber-500"
-                  )}
-                  style={{ width: `${checklist?.percentual_completo ?? declaration?.percentualCompleto ?? 0}%` }}
-                />
-              </div>
-              <span className="shrink-0 text-[10px] font-black tabular-nums text-muted-foreground/50">
-                {checklist?.percentual_completo ?? declaration?.percentualCompleto ?? 0}%
-              </span>
             </div>
           </div>
         </div>

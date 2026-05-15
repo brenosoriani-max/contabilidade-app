@@ -20,7 +20,6 @@ import useSWR from "swr";
 import { ChecklistDocumentos } from "@/components/agendamentos/checklist-documentos";
 import { LinkEnvioCliente } from "@/components/agendamentos/link-envio-cliente";
 import { UploadDocumentos } from "@/components/agendamentos/upload-documentos";
-import { DeclaracaoIrpfAssistente } from "@/components/declaracao-irpf-assistente";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -99,6 +99,9 @@ export function DrawerAgendamento({
   const [checklistDraft, setChecklistDraft] = useState<SchedulingChecklistItem[]>([]);
   const [checklistDirty, setChecklistDirty] = useState(false);
   const [savingChecklist, setSavingChecklist] = useState(false);
+  const [contribName, setContribName] = useState('');
+  const [contribCpf, setContribCpf] = useState('');
+  const [contribSaving, setContribSaving] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   const { data, isLoading, mutate } = useSWR(
@@ -108,16 +111,6 @@ export function DrawerAgendamento({
   );
 
   const detail = data?.agendamento ?? scheduling;
-
-  const { data: contribData } = useSWR(
-    open && detail?.contribuinteId
-      ? ["contribuinte-irpf", detail.contribuinteId]
-      : null,
-    () => contribuinteService.get(detail!.contribuinteId as number),
-    { revalidateOnFocus: false }
-  );
-
-  const declaracaoIrpfId = contribData?.declaracoes?.[0]?.id;
 
   useEffect(() => {
     if (!detail || checklistDirty) return;
@@ -131,6 +124,13 @@ export function DrawerAgendamento({
   };
 
   const progressTone = getProgressTone(progress.percentage);
+
+  useEffect(() => {
+    if (!detail) return;
+
+    setContribName(detail.nome || detail.titulo || '');
+    setContribCpf(detail.cpf || '');
+  }, [detail?.id, detail?.nome, detail?.cpf, detail?.titulo]);
 
   const formattedDate = useMemo(() => {
     if (!detail?.dataAgendamento) return "-";
@@ -191,6 +191,49 @@ export function DrawerAgendamento({
     }
   }
 
+  async function saveContribuinteCadastro() {
+    if (!detail) return;
+
+    if (!contribName.trim()) {
+      toast.error('Informe o nome do contribuinte');
+      return;
+    }
+
+    if (!detail.contribuinteId && !contribCpf.trim()) {
+      toast.error('Informe o CPF para criar o cadastro');
+      return;
+    }
+
+    try {
+      setContribSaving(true);
+
+      if (detail.contribuinteId) {
+        await contribuinteService.update(detail.contribuinteId, {
+          nome: contribName.trim(),
+        });
+        void mutate();
+        toast.success('Cadastro atualizado');
+        return;
+      }
+
+      const response = await contribuinteService.create({
+        nome: contribName.trim(),
+        cpf: contribCpf.trim(),
+      });
+
+      const updated = await schedulingService.update(detail.id, {
+        contribuinteId: response.contribuinte.id,
+      });
+
+      handleUpdated(updated.agendamento, true);
+      toast.success('Cadastro criado e vinculado ao agendamento');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao criar/atualizar cadastro');
+    } finally {
+      setContribSaving(false);
+    }
+  }
+
   function discardAndClose() {
     setChecklistDirty(false);
     setConfirmCloseOpen(false);
@@ -238,11 +281,10 @@ export function DrawerAgendamento({
               ) : (
                 <Tabs defaultValue="resumo" className="min-h-0 flex-1 gap-0">
                   <div className="border-b px-6 py-3">
-                    <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-5">
+                    <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-4">
                       <TabsTrigger value="resumo">Resumo</TabsTrigger>
                       <TabsTrigger value="documentos">Docs</TabsTrigger>
                       <TabsTrigger value="checklist">Checklist</TabsTrigger>
-                      <TabsTrigger value="assistente">Assistente</TabsTrigger>
                       <TabsTrigger value="historico">Historico</TabsTrigger>
                     </TabsList>
                   </div>
@@ -300,6 +342,52 @@ export function DrawerAgendamento({
                         link={detail.envioLink}
                         onUpdated={(updated) => handleUpdated(updated, true)}
                       />
+
+                      <div className="rounded-2xl border border-muted/40 bg-muted/5 p-4">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold">Cadastro do contribuinte</p>
+                            <p className="text-xs text-muted-foreground">
+                              {detail.contribuinteId
+                                ? 'Atualize o cadastro do contribuinte vinculado.'
+                                : 'Crie um cadastro para vincular este agendamento.'}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={saveContribuinteCadastro}
+                            disabled={contribSaving}
+                          >
+                            {detail.contribuinteId ? 'Atualizar cadastro' : 'Criar cadastro'}
+                          </Button>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">
+                              Nome
+                            </label>
+                            <Input
+                              value={contribName}
+                              onChange={(event) => setContribName(event.target.value)}
+                              className="mt-2"
+                              disabled={contribSaving}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">
+                              CPF
+                            </label>
+                            <Input
+                              value={contribCpf}
+                              onChange={(event) => setContribCpf(event.target.value)}
+                              className="mt-2"
+                              disabled={Boolean(detail.contribuinteId) || contribSaving}
+                              placeholder={detail.contribuinteId ? 'CPF já vinculado' : '000.000.000-00'}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </TabsContent>
 
                     <TabsContent value="documentos" className="mt-0">
@@ -320,28 +408,6 @@ export function DrawerAgendamento({
                         onChange={updateChecklistDraft}
                         onSave={saveChecklist}
                       />
-                    </TabsContent>
-
-                    <TabsContent value="assistente" className="mt-0 space-y-4">
-                      {!detail.contribuinteId ? (
-                        <p className="text-sm text-muted-foreground">
-                          Vincule um contribuinte ao agendamento para usar o
-                          assistente IRPF.
-                        </p>
-                      ) : !declaracaoIrpfId ? (
-                        <p className="text-sm text-muted-foreground">
-                          Nenhuma declaração encontrada para este contribuinte.
-                          Importe um XML na tela de importação primeiro.
-                        </p>
-                      ) : (
-                        <DeclaracaoIrpfAssistente
-                          declaracaoId={declaracaoIrpfId}
-                          anoExercicio={
-                            contribData?.declaracoes?.[0]?.anoExercicio
-                          }
-                          agendamentoId={detail.id}
-                        />
-                      )}
                     </TabsContent>
 
                     <TabsContent value="historico" className="mt-0">
