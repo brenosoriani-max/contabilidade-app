@@ -54,10 +54,22 @@ export async function loadModeloForDeclaracao(declaracaoId: number) {
     };
   }
 
-  const modelo =
+  const modeloParsed =
     envelope.modelo && Object.keys(envelope.modelo).length
       ? (envelope.modelo as Record<string, unknown>)
       : buildSkeletonModeloFromDeclaracaoRow(declaracao);
+
+  // CRITICAL: Always overwrite collections with data from DB relations to ensure sync
+  // even if the stored JSON is stale or incomplete.
+  const skeleton = buildSkeletonModeloFromDeclaracaoRow(declaracao);
+  const modelo = {
+    ...modeloParsed,
+    rendimentos: skeleton.rendimentos,
+    bens: skeleton.bens,
+    dividas: skeleton.dividas,
+    dependentes: skeleton.dependentes,
+    pagamentos: skeleton.pagamentos,
+  };
 
   return { declaracao, envelope, modelo };
 }

@@ -352,6 +352,7 @@ export function gerarChecklistLocal(
     qtdRendTributaveis: number;
     qtdDocumentosArquivados?: number;
     xmlOriginal?: boolean;
+    situacao?: string;
   }
 ): Record<string, unknown> {
   const checklist: Array<Record<string, unknown>> = [];
@@ -376,8 +377,26 @@ export function gerarChecklistLocal(
 
   const pj = Number(getModeloPath(modelo, 'rendimentos.pj.total_bruto') ?? 0);
 
-  add('identificacao', 'Documento de identidade (RG/CNH)', 'pendente', 'identificacao', 'obrigatorio');
-  add('identificacao', 'Comprovante de residencia', 'pendente', 'endereco', 'obrigatorio');
+  const hasIdentidade = !!(
+    getModeloPath(modelo, 'identificacao.titulo_eleitor') ||
+    getModeloPath(modelo, 'identificacao.numero_rg')
+  );
+  add(
+    'identificacao',
+    'Documento de identidade (RG/CNH)',
+    hasIdentidade ? 'lancado' : 'pendente',
+    'identificacao',
+    'obrigatorio'
+  );
+
+  const hasResidencia = !!getModeloPath(modelo, 'endereco.logradouro');
+  add(
+    'identificacao',
+    'Comprovante de residencia',
+    hasResidencia ? 'lancado' : 'pendente',
+    'endereco',
+    'obrigatorio'
+  );
 
   if (pj > 0 || ctx.qtdRendTributaveis > 0) {
     add(
@@ -393,7 +412,7 @@ export function gerarChecklistLocal(
     add(
       'dependentes',
       `Documentacao dos ${ctx.qtdDependentes} dependente(s)`,
-      'pendente',
+      ctx.qtdDependentes > 0 ? 'lancado' : 'pendente',
       'dependentes',
       'obrigatorio'
     );
@@ -403,7 +422,7 @@ export function gerarChecklistLocal(
     add(
       'bens',
       'Documentos comprobatorios de bens e direitos (quando aplicavel)',
-      'pendente',
+      ctx.qtdBens > 0 ? 'lancado' : 'pendente',
       'bens',
       'recomendado'
     );
@@ -425,22 +444,25 @@ export function gerarChecklistLocal(
     Math.max(checklist.length, 1);
   const percentual = Math.round(pct * 100);
 
+  // Dynamic Pipeline Logic
+  let status_pipeline = 'pendente';
+  if (ctx.situacao === 'transmitida' || ctx.situacao === 'processada') {
+    status_pipeline = 'entregue';
+  } else if (percentual >= 98) {
+    status_pipeline = 'pronto_envio';
+  } else if (percentual >= 70) {
+    status_pipeline = 'revisao_contador';
+  } else if (ctx.xmlOriginal) {
+    status_pipeline = 'coletando_docs';
+  }
+
   return {
     checklist,
-    status_pipeline:
-      percentual === 100
-        ? 'entregue'
-        : percentual >= 90
-          ? 'pronto_envio'
-          : percentual >= 60
-            ? 'revisao_contador'
-            : percentual >= 10 || ctx.xmlOriginal
-              ? 'coletando_docs'
-              : 'pendente',
+    status_pipeline,
     percentual_completo: percentual,
     proxima_acao:
       checklist.find((i) => i.status !== 'lancado')?.descricao?.toString() ??
-      'Conferir exportacao',
+      'Conferir exportação final',
   };
 }
 

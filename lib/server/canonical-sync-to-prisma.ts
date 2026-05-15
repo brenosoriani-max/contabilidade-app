@@ -184,6 +184,8 @@ export function buildSkeletonModeloFromDeclaracaoRow(row: any): Record<string, u
       isentos: (row.rendimentosIsentos || []).map((r: any) => ({
         codigo: field(r.codigo),
         descricao: field(r.descricao),
+        cnpjFonte: field(r.cnpjFonte),
+        nomeFonte: field(r.nomeFonte),
         valor: field(Number(r.valor)),
       })),
     },
@@ -197,6 +199,8 @@ export function buildSkeletonModeloFromDeclaracaoRow(row: any): Record<string, u
     dividas: (row.dividasOnus || []).map((d: any) => ({
       codigo: d.codigo,
       descricao: d.descricao,
+      cnpjCredor: d.cnpjCredor,
+      nomeCredor: d.nomeCredor,
       valorAnterior: Number(d.valorAnterior),
       valorAtual: Number(d.valorAtual),
       valorPago: Number(d.valorPago),

@@ -292,7 +292,7 @@ export const ContribuinteDetails = React.memo(
       useState(false)
 
     const [formatoExport, setFormatoExport] =
-      useState<"dec" | "xml" | "posicional">("dec")
+      useState<"xml" | "posicional" | "dec">("dec")
 
     const [customTag, setCustomTag] = useState("")
 
@@ -575,7 +575,7 @@ export const ContribuinteDetails = React.memo(
       }
     }
 
-    async function handleExportar(formato: "dec" | "xml" | "posicional") {
+    async function handleExportar(formato: "xml" | "posicional" | "dec") {
       if (!declaracaoId) return
 
       setExportando(true)
@@ -609,8 +609,10 @@ export const ContribuinteDetails = React.memo(
         const url = URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        const ext = formato === "xml" ? "xml" : "DEC"
-        a.download = `${contribuinte?.cpf}_IRPF_${anoExercicio}.${ext}`
+        const anoAnterior = anoExercicio - 1;
+        const tipo = "ORIGI"; // Conforme solicitado
+        const ext = formato === "xml" ? "xml" : "DEC";
+        a.download = `${contribuinte?.cpf}-IRPF-A-${anoExercicio}-${anoAnterior}-${tipo}.${ext}`;
         a.click()
         URL.revokeObjectURL(url)
         toast.success("Arquivo gerado!", {
@@ -668,13 +670,9 @@ export const ContribuinteDetails = React.memo(
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56 rounded-xl border-white/20 bg-background/80 backdrop-blur-md">
-                      <DropdownMenuItem onClick={() => handleExportar("dec")} className="cursor-pointer font-bold gap-2">
-                        <Package className="h-4 w-4 text-primary" />
-                        Pacote PGD (.DEC)
-                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleExportar("posicional")} className="cursor-pointer font-bold gap-2">
                         <FileText className="h-4 w-4 text-primary" />
-                        Layout Posicional (.DEC)
+                        Arquivo .DEC (Layout RFB)
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleExportar("xml")} className="cursor-pointer font-bold gap-2">
                         <FileCode className="h-4 w-4 text-primary" />
@@ -1127,7 +1125,7 @@ export const ContribuinteDetails = React.memo(
                   </Button>
                 </CardContent>
               </Card>
- 
+
               <Card className="border-none shadow-sm h-full flex flex-col">
                 <CardHeader>
                   <div className="flex items-center gap-2">
@@ -1143,11 +1141,11 @@ export const ContribuinteDetails = React.memo(
                       <SelectContent>{TAGS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
- 
+
                   {tag === "Outros" && (
                     <Input placeholder="Especifique o nome do documento..." className="h-12 rounded-xl border-primary/20 focus:ring-primary shadow-sm animate-in fade-in slide-in-from-top-2" value={customTag} onChange={(e) => setCustomTag(e.target.value)} />
                   )}
- 
+
                   <div className="relative group space-y-1.5">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Arquivo</Label>
                     <div className="relative">
@@ -1157,14 +1155,14 @@ export const ContribuinteDetails = React.memo(
                        </div>
                     </div>
                   </div>
- 
+
                   <Button className="w-full h-12 rounded-xl font-black shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all" disabled={docLoading || !docFile || !tag || (tag === "Outros" && !customTag)} onClick={handleDocumento}>
                     {docLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
                     EFETUAR UPLOAD AGORA
                   </Button>
                 </CardContent>
               </Card>
- 
+
               <Card className="md:col-span-2 border-none shadow-sm bg-gradient-to-r from-emerald-50 to-emerald-100/30">
                 <CardHeader>
                   <div className="flex items-center gap-2">
@@ -1173,12 +1171,9 @@ export const ContribuinteDetails = React.memo(
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <Button variant={formatoExport === "dec" ? "default" : "outline"} className={`h-14 rounded-xl font-black text-[10px] transition-all p-2 ${formatoExport === 'dec' ? 'bg-emerald-600 hover:bg-emerald-700' : 'border-emerald-200'}`} onClick={() => setFormatoExport("dec")}>
                       ARQUIVO .DEC
-                    </Button>
-                    <Button variant={formatoExport === "posicional" ? "default" : "outline"} className={`h-14 rounded-xl font-black text-[10px] transition-all p-2 ${formatoExport === 'posicional' ? 'bg-emerald-600 hover:bg-emerald-700' : 'border-emerald-200'}`} onClick={() => setFormatoExport("posicional")}>
-                      LAYOUT RFB (.DEC)
                     </Button>
                     <Button variant={formatoExport === "xml" ? "default" : "outline"} className={`h-14 rounded-xl font-black text-[10px] transition-all p-2 ${formatoExport === 'xml' ? 'bg-emerald-600 hover:bg-emerald-700' : 'border-emerald-200'}`} onClick={() => setFormatoExport("xml")}>
                       ARQUIVO .XML
@@ -1195,7 +1190,7 @@ export const ContribuinteDetails = React.memo(
               </Card>
             </div>
           </TabsContent>
- 
+
           {/* TAB: BENS (PREMIUM RENDERING) */}
           <TabsContent value="bens">
             <Card className="border-none shadow-sm overflow-hidden">
@@ -1213,7 +1208,7 @@ export const ContribuinteDetails = React.memo(
                       </CardDescription>
                     </div>
                   </div>
- 
+
                   <div className="flex items-center gap-3">
                     <div className="relative w-[320px]">
                       <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />

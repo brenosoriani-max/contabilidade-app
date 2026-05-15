@@ -91,7 +91,8 @@ export async function POST(
       .slice(0, 11);
     const cpfPart = cpf.length === 11 ? cpf : 'SEM_CPF';
     const anoAnterior = anoExercicio - 1;
-    const nomeBase = `${cpfPart}-IRPF-${anoExercicio}-${anoAnterior}-${tipo}`;
+    const tipoSuffix = tipo === 'O' ? 'ORIGI' : tipo === 'R' ? 'RETIF' : tipo;
+    const nomeBase = `${cpfPart}-IRPF-A-${anoExercicio}-${anoAnterior}-${tipoSuffix}`;
 
     if (body.json) {
       return ok({
