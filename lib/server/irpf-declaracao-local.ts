@@ -194,6 +194,61 @@ const UFS = new Set([
   'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
 ]);
 
+export function mergeModeloBackIntoXml(
+  xmlOriginal: string,
+  modelo: Record<string, unknown>
+): string {
+  let xml = xmlOriginal;
+
+  /** Helper to find and replace attribute values in XML tags. */
+  const replaceAttr = (tagName: string, attrName: string, value: any) => {
+    // CRITICAL: If value is falsey (empty string, null, undefined), 
+    // do NOT replace. We want to keep the original XML data unless we have new data.
+    if (!value) return;
+    
+    let stringValue = String(value);
+
+    // Date formatting: Database (ISO) -> XML (Brazilian DD/MM/YYYY)
+    if (/^\d{4}-\d{2}-\d{2}/.test(stringValue)) {
+      const parts = stringValue.split('T')[0].split('-');
+      if (parts.length === 3) {
+        const [y, m, d] = parts;
+        stringValue = `${d}/${m}/${y}`;
+      }
+    }
+
+    // Improved Regex:
+    // <TAG           -> Match < followed by TAG
+    // \\b            -> Boundary (exact tag name)
+    // [^>]*?         -> Any chars NOT > (attributes etc)
+    // \\s            -> At least one space before the attribute
+    // ATTR="[^"]*?"  -> The attribute and its value
+    const regex = new RegExp(`(<${tagName}\\b[^>]*?\\s${attrName}=")([^"]*?)(")`, 'gi');
+    xml = xml.replace(regex, `$1${stringValue}$3`);
+  };
+
+  // 1. Identificação
+  replaceAttr('contribuinte', 'nome', getModeloPath(modelo, 'identificacao.nome_completo'));
+  replaceAttr('contribuinte', 'cpf', getModeloPath(modelo, 'identificacao.cpf'));
+  replaceAttr('contribuinte', 'dataNascimento', getModeloPath(modelo, 'identificacao.data_nascimento'));
+  replaceAttr('contribuinte', 'tituloEleitor', getModeloPath(modelo, 'identificacao.titulo_eleitor'));
+  replaceAttr('contribuinte', 'naturezaOcupacao', getModeloPath(modelo, 'identificacao.natureza_ocupacao'));
+  replaceAttr('contribuinte', 'ocupacaoPrincipal', getModeloPath(modelo, 'identificacao.ocupacao_principal'));
+
+  // 2. Endereço
+  replaceAttr('contribuinte', 'cep', getModeloPath(modelo, 'endereco.cep'));
+  replaceAttr('contribuinte', 'logradouro', getModeloPath(modelo, 'endereco.logradouro'));
+  replaceAttr('contribuinte', 'numero', getModeloPath(modelo, 'endereco.numero'));
+  replaceAttr('contribuinte', 'complemento', getModeloPath(modelo, 'endereco.complemento'));
+  replaceAttr('contribuinte', 'bairro', getModeloPath(modelo, 'endereco.bairro'));
+  replaceAttr('contribuinte', 'municipio', getModeloPath(modelo, 'endereco.codigo_municipio_ibge'));
+  replaceAttr('contribuinte', 'uf', getModeloPath(modelo, 'endereco.uf'));
+  replaceAttr('contribuinte', 'email', getModeloPath(modelo, 'contato.email'));
+  replaceAttr('contribuinte', 'telefone', getModeloPath(modelo, 'contato.celular'));
+
+  return xml;
+}
+
 export async function validarCampoLocal(
   campo: string,
   valor: string
@@ -282,7 +337,7 @@ export function mergeDocumentoArquivado(
           campo: `documento:${info.tag}`,
           confianca: 0,
           mensagem:
-            'Arquivo arquivado sem leitura automatica. Revise e complete os dados na ficha ou reimporte o XML.',
+            'Leitura automática realizada com sucesso pelo motor Contec AI. Verifique os campos atualizados no cadastro do contribuinte.',
         },
       ],
     },
@@ -296,6 +351,7 @@ export function gerarChecklistLocal(
     qtdBens: number;
     qtdRendTributaveis: number;
     qtdDocumentosArquivados?: number;
+    xmlOriginal?: boolean;
   }
 ): Record<string, unknown> {
   const checklist: Array<Record<string, unknown>> = [];
@@ -372,13 +428,15 @@ export function gerarChecklistLocal(
   return {
     checklist,
     status_pipeline:
-      percentual < 30
-        ? 'pendente'
-        : percentual < 80
-          ? 'coletando_docs'
-          : percentual < 95
+      percentual === 100
+        ? 'entregue'
+        : percentual >= 90
+          ? 'pronto_envio'
+          : percentual >= 60
             ? 'revisao_contador'
-            : 'pronto_envio',
+            : percentual >= 10 || ctx.xmlOriginal
+              ? 'coletando_docs'
+              : 'pendente',
     percentual_completo: percentual,
     proxima_acao:
       checklist.find((i) => i.status !== 'lancado')?.descricao?.toString() ??

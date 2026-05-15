@@ -118,6 +118,8 @@ export interface Declaration {
   saldoPagar: number;
   aliquotaEfetiva: number;
   totalImpostoPago: number;
+  statusPipeline?: string;
+  percentualCompleto?: number;
   rawData?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
@@ -252,6 +254,8 @@ export interface XMLImportResult {
 }
 export interface Checklist {
   percentual_completo: number;
+  status_pipeline?: string;
   proxima_acao?: string;
+  checklist: Array<any>;
   [key: string]: any;
 }

@@ -4,9 +4,10 @@ import { prisma } from '@/lib/prisma';
 import { fail, ok } from '@/lib/server/api';
 import { requireAuth } from '@/lib/server/auth';
 import { getModeloPath } from '@/lib/server/irpf-model-utils';
-import { validarExportacaoLocal } from '@/lib/server/irpf-declaracao-local';
+import { mergeModeloBackIntoXml, validarExportacaoLocal } from '@/lib/server/irpf-declaracao-local';
 import { loadModeloForDeclaracao } from '@/lib/server/declaracao-modelo';
 import { packDEC } from '@/lib/server/dec-pack';
+import { generatePositionalIRPF } from '@/lib/server/irpf-positional-engine';
 
 export async function POST(
   request: NextRequest,
@@ -26,8 +27,8 @@ export async function POST(
       anoExercicio?: number;
       tipo?: string;
       json?: boolean;
-      /** "dec" (pacote PGD) ou "xml" (arquivo XML bruto gravado na declaracao) */
-      formato?: 'dec' | 'xml';
+      /** "dec" (pacote PGD), "xml" (bruto), ou "posicional" (layout Receita) */
+      formato?: 'dec' | 'xml' | 'posicional';
     };
 
     const decl = await prisma.declaracao.findUnique({
@@ -64,7 +65,7 @@ export async function POST(
       );
     }
 
-    const xmlConteudo = decl.xmlOriginal?.trim();
+    let xmlConteudo = decl.xmlOriginal?.trim();
     if (!xmlConteudo) {
       return fail(
         'Nao ha XML original gravado nesta declaracao. Importe o XML (importacao em massa ou reimporte na tela IRPF).',
@@ -72,13 +73,16 @@ export async function POST(
       );
     }
 
+    // SYNC: Apply changes from Modelo (Database) back into the XML string
+    xmlConteudo = mergeModeloBackIntoXml(xmlConteudo, modelo);
+
     const anoExercicio =
       typeof body.anoExercicio === 'number' && Number.isFinite(body.anoExercicio)
         ? body.anoExercicio
         : decl.anoExercicio;
 
     const tipo = typeof body.tipo === 'string' && body.tipo ? body.tipo : 'O';
-    const formato = body.formato === 'xml' ? 'xml' : 'dec';
+    const formato = body.formato || 'dec';
 
     const cpfRaw =
       getModeloPath(modelo, 'identificacao.cpf') ?? decl.contribuinte.cpf;
@@ -86,7 +90,8 @@ export async function POST(
       .replace(/\D/g, '')
       .slice(0, 11);
     const cpfPart = cpf.length === 11 ? cpf : 'SEM_CPF';
-    const nomeBase = `${cpfPart}IRPF${anoExercicio}${tipo}`;
+    const anoAnterior = anoExercicio - 1;
+    const nomeBase = `${cpfPart}-IRPF-${anoExercicio}-${anoAnterior}-${tipo}`;
 
     if (body.json) {
       return ok({
@@ -104,6 +109,17 @@ export async function POST(
         headers: {
           'Content-Type': 'application/xml; charset=utf-8',
           'Content-Disposition': `attachment; filename="${nomeBase}.xml"`,
+        },
+      });
+    }
+
+    if (formato === 'posicional') {
+      const posicionalConteudo = generatePositionalIRPF(modelo);
+      return new NextResponse(posicionalConteudo, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=iso-8859-1',
+          'Content-Disposition': `attachment; filename="${nomeBase}.DEC"`,
         },
       });
     }

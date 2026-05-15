@@ -22,7 +22,8 @@ export async function GET(
 
     const decl = await prisma.declaracao.findUnique({
       where: { id: declaracaoId },
-      include: {
+      select: {
+        xmlOriginal: true,
         _count: {
           select: {
             rendimentosTributaveis: true,
@@ -44,6 +45,7 @@ export async function GET(
       qtdBens: decl._count.bensDireitos,
       qtdRendTributaveis: decl._count.rendimentosTributaveis,
       qtdDocumentosArquivados: docCount,
+      xmlOriginal: !!decl.xmlOriginal,
     });
 
     return ok(resultado);

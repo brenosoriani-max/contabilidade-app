@@ -18,7 +18,15 @@ import {
 export async function loadModeloForDeclaracao(declaracaoId: number) {
   const declaracao = await prisma.declaracao.findUnique({
     where: { id: declaracaoId },
-    include: { contribuinte: true },
+    include: { 
+      contribuinte: true,
+      bensDireitos: true,
+      dependentes: true,
+      dividasOnus: true,
+      rendimentosTributaveis: true,
+      rendimentosIsentos: true,
+      deducoes: true
+    },
   });
 
   if (!declaracao?.contribuinte) {

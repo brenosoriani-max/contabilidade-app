@@ -8,6 +8,25 @@ import {
   loadModeloForDeclaracao,
   persistModeloEnvelope,
 } from '@/lib/server/declaracao-modelo';
+import { prisma } from '@/lib/prisma';
+
+const MODELO_PATH_TO_DB: Record<string, string> = {
+  'identificacao.nome_completo': 'nome',
+  'identificacao.cpf': 'cpf',
+  'identificacao.data_nascimento': 'dataNascimento',
+  'identificacao.titulo_eleitor': 'tituloEleitor',
+  'identificacao.ocupacao_principal': 'ocupacaoPrincipal',
+  'identificacao.natureza_ocupacao': 'naturezaOcupacao',
+  'endereco.cep': 'enderecoCep',
+  'endereco.uf': 'enderecoUf',
+  'endereco.codigo_municipio_ibge': 'enderecoMunicipio',
+  'endereco.bairro': 'enderecoBairro',
+  'endereco.logradouro': 'enderecoLogradouro',
+  'endereco.numero': 'enderecoNumero',
+  'endereco.complemento': 'enderecoComplemento',
+  'contato.email': 'email',
+  'contato.celular': 'telefone',
+};
 
 export async function PUT(
   request: NextRequest,
@@ -54,6 +73,28 @@ export async function PUT(
     );
 
     await persistModeloEnvelope(declaracaoId, modeloAtualizado, envelope);
+
+    // SYNC: Update main Contribuinte record if the field is a core database field
+    const dbColumn = MODELO_PATH_TO_DB[campo];
+    if (dbColumn) {
+      const decl = await prisma.declaracao.findUnique({
+        where: { id: declaracaoId },
+        select: { contribuinteId: true }
+      });
+      if (decl) {
+        let dbValue: any = validacao.valor_normalizado;
+        if (dbColumn === 'dataNascimento' && dbValue) {
+           const [d, m, y] = dbValue.split('/');
+           const parsed = new Date(`${y}-${m}-${d}`);
+           if (!isNaN(parsed.getTime())) dbValue = parsed;
+        }
+        
+        await prisma.contribuinte.update({
+          where: { id: decl.contribuinteId },
+          data: { [dbColumn]: dbValue }
+        });
+      }
+    }
 
     return ok({
       sucesso: true,

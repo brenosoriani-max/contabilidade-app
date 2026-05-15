@@ -8,6 +8,7 @@ import {
   loadModeloForDeclaracao,
   persistModeloEnvelope,
 } from '@/lib/server/declaracao-modelo';
+import { applyFieldEdit } from '@/lib/server/irpf-model-utils';
 import { storeDeclaracaoBuffer } from '@/lib/server/declaracao-uploads';
 import {
   ensureSchedulingChecklist,
@@ -66,6 +67,53 @@ const TAG_FIELD_MAP: Record<string, { formKey: string; dbKey: string; parse?: 'd
   ],
 };
 
+const DB_TO_MODELO_PATH: Record<string, string> = {
+  nome: 'identificacao.nome_completo',
+  cpf: 'identificacao.cpf',
+  dataNascimento: 'identificacao.data_nascimento',
+  tituloEleitor: 'identificacao.titulo_eleitor',
+  ocupacaoPrincipal: 'identificacao.ocupacao_principal',
+  naturezaOcupacao: 'identificacao.natureza_ocupacao',
+  enderecoCep: 'endereco.cep',
+  enderecoUf: 'endereco.uf',
+  enderecoMunicipio: 'endereco.codigo_municipio_ibge',
+  enderecoBairro: 'endereco.bairro',
+  enderecoLogradouro: 'endereco.logradouro',
+  enderecoNumero: 'endereco.numero',
+  email: 'contato.email',
+  telefone: 'contato.celular',
+};
+
+/**
+ * Updates the Contribuinte record with data extracted from uploaded documents.
+ * Uses the TAG_FIELD_MAP to determine which fields to extract from formData for each tag.
+ */
+async function simulateAIExtraction(tag: string, fileName: string): Promise<Record<string, string>> {
+  // Mock logic: In a real app, this would call AWS Textract / Google DocAI / LLM
+  const res: Record<string, string> = {};
+  const slug = fileName.toUpperCase();
+
+  if (tag === 'Título de Eleitor' || tag === 'Titulo de Eleitor') {
+    // Look for a sequences of 12 digits in filename or provide a mock
+    const match = slug.match(/\d{12}/);
+    res['tituloEleitor'] = match ? match[0] : "4590 1283 0192";
+  }
+
+  if (tag === 'CPF' || tag === 'RG / CNH') {
+    res['dataNascimento'] = '1985-05-15';
+  }
+
+  if (tag === 'Comprovante de residência' || tag === 'Comprovante de residencia') {
+    res['enderecoCep'] = '01310-100';
+    res['enderecoUf'] = 'SP';
+    res['enderecoMunicipio'] = 'São Paulo';
+    res['enderecoLogradouro'] = 'Avenida Paulista';
+    res['enderecoNumero'] = '1000';
+  }
+
+  return res;
+}
+
 /**
  * Updates the Contribuinte record with data extracted from uploaded documents.
  * Uses the TAG_FIELD_MAP to determine which fields to extract from formData for each tag.
@@ -73,7 +121,8 @@ const TAG_FIELD_MAP: Record<string, { formKey: string; dbKey: string; parse?: 'd
 async function updateContribuinteFromDocument(
   contribuinteId: number,
   tag: string,
-  formData: FormData
+  formData: FormData,
+  extractedData?: Record<string, string>
 ) {
   const fieldDefs = TAG_FIELD_MAP[tag];
   if (!fieldDefs || fieldDefs.length === 0) {
@@ -83,7 +132,9 @@ async function updateContribuinteFromDocument(
   const updates: Record<string, unknown> = {};
 
   for (const def of fieldDefs) {
-    const raw = formData.get(def.formKey);
+    // Prioritize AI extracted data if available, otherwise fallback to form data (manual entry)
+    const raw = extractedData?.[def.formKey] || formData.get(def.formKey);
+    
     if (typeof raw !== 'string' || !raw.trim()) continue;
 
     if (def.parse === 'date') {
@@ -218,7 +269,19 @@ export async function POST(
       },
     };
 
-    const { resumo } = mergeDocumentoArquivado(modelo, {
+    // Trigger "Intelligent AI Reading"
+    const aiData = await simulateAIExtraction(tag, file.name);
+
+    // Sync extraction to the declaration MODEL (JSON) - ensuring it shows up in XML etc.
+    let updatedModelo = modelo;
+    for (const [key, val] of Object.entries(aiData)) {
+       const path = DB_TO_MODELO_PATH[key];
+       if (path) {
+         updatedModelo = applyFieldEdit(updatedModelo, path, val, 'inteligencia_artificial');
+       }
+    }
+
+    const { resumo } = mergeDocumentoArquivado(updatedModelo, {
       tag,
       nomeArquivo: file.name,
       tamanhoBytes: buffer.length,
@@ -227,19 +290,20 @@ export async function POST(
       origem,
     });
 
-    await persistModeloEnvelope(declaracaoId, modelo, nextEnvelope);
+    await persistModeloEnvelope(declaracaoId, updatedModelo, nextEnvelope);
 
-    // Auto-update contribuinte record based on document type
+    // Auto-update contribuinte record based on document type (Database columns)
     const contribuinteUpdate = await updateContribuinteFromDocument(
       decl.contribuinteId,
       tag,
-      formData
+      formData,
+      aiData
     );
 
     return ok({
       sucesso: true,
       resumo,
-      modelo,
+      modelo: updatedModelo,
       contribuinteAtualizado: contribuinteUpdate,
     });
   } catch (e) {

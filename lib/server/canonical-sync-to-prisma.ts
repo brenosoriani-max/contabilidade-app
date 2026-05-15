@@ -134,31 +134,7 @@ export async function syncCanonicalModelToPrisma(
   }
 }
 
-export function buildSkeletonModeloFromDeclaracaoRow(row: {
-  contribuinte: {
-    cpf: string;
-    nome: string;
-    dataNascimento: Date | null;
-    tituloEleitor: string | null;
-    naturezaOcupacao: string | null;
-    email: string | null;
-    telefone: string | null;
-    enderecoUf: string | null;
-    enderecoMunicipio: string | null;
-    enderecoCep: string | null;
-    enderecoBairro: string | null;
-    enderecoLogradouro: string | null;
-    enderecoNumero: string | null;
-    enderecoComplemento: string | null;
-  };
-  anoExercicio: number;
-  baseCalculo: unknown;
-  impostoDevido: unknown;
-  impostoPago: unknown;
-  impostoRestituir: unknown;
-  impostoPagar: unknown;
-  totalRendimentosTributaveis: unknown;
-}): Record<string, unknown> {
+export function buildSkeletonModeloFromDeclaracaoRow(row: any): Record<string, unknown> {
   const field = (valor: unknown, fonte = 'xml_pgd') =>
     valor == null || valor === ''
       ? { valor: null, fonte, status: 'pendente', confianca: 1 }
@@ -177,6 +153,7 @@ export function buildSkeletonModeloFromDeclaracaoRow(row: {
       data_nascimento: field(fmtDate(c.dataNascimento)),
       titulo_eleitor: field(c.tituloEleitor),
       natureza_ocupacao: field(c.naturezaOcupacao),
+      ocupacao_principal: field(c.ocupacaoPrincipal),
     },
     contato: {
       email: field(c.email),
@@ -195,10 +172,51 @@ export function buildSkeletonModeloFromDeclaracaoRow(row: {
       ano_exercicio: field(row.anoExercicio),
     },
     rendimentos: {
-      pj: {
-        total_bruto: field(Number(row.totalRendimentosTributaveis)),
-      },
+      pj: (row.rendimentosTributaveis || []).map((r: any) => ({
+        cnpj: field(r.cnpjFonte),
+        nomeFonte: field(r.nomeFonte),
+        total_bruto: field(Number(r.valorRendimento)),
+        previdencia_oficial: field(Number(r.valorPrevidencia)),
+        irrf_retido: field(Number(r.valorIrrf)),
+        decimo_terceiro: field(Number(r.valor13o)),
+        irrf_decimo_terceiro: field(Number(r.irrf13o)),
+      })),
+      isentos: (row.rendimentosIsentos || []).map((r: any) => ({
+        codigo: field(r.codigo),
+        descricao: field(r.descricao),
+        valor: field(Number(r.valor)),
+      })),
     },
+    bens: (row.bensDireitos || []).map((b: any) => ({
+      codigo: b.codigo,
+      grupo: b.grupo,
+      descricao: b.descricao,
+      valorAnterior: Number(b.valorAnterior),
+      valorAtual: Number(b.valorAtual),
+    })),
+    dividas: (row.dividasOnus || []).map((d: any) => ({
+      codigo: d.codigo,
+      descricao: d.descricao,
+      valorAnterior: Number(d.valorAnterior),
+      valorAtual: Number(d.valorAtual),
+      valorPago: Number(d.valorPago),
+    })),
+    dependentes: (row.dependentes || []).map((d: any) => ({
+      codigo_dependente: d.tipo,
+      cpf: d.cpf,
+      nome_completo: d.nome,
+      data_nascimento: fmtDate(d.dataNascimento),
+    })),
+    pagamentos: (row.deducoes || []).map((d: any) => ({
+      codigo: field(d.codigo),
+      descricao: field(d.descricao),
+      cpfCnpj: field(d.cpfCnpjBeneficiario),
+      nomeBeneficiario: field(d.nomeBeneficiario),
+      valor: field(Number(d.valor)),
+      valorReembolso: field(Number(d.valorReembolso)),
+    })),
+    exclusivos: [], // Usually from XML/JSON
+    alimentandos: [], // Usually from XML/JSON
     calculo: {
       base_calculo: field(Number(row.baseCalculo)),
       imposto_devido: field(Number(row.impostoDevido)),
