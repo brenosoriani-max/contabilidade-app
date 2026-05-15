@@ -13,6 +13,229 @@ import {
   mapSchedulingDocument,
 } from '@/lib/server/mappers';
 import type { SchedulingChecklistItem } from '@/types';
+import { loadModeloForDeclaracao, persistModeloEnvelope } from '@/lib/server/declaracao-modelo';
+import { applyFieldEdit } from '@/lib/server/irpf-model-utils';
+import { storeDeclaracaoBuffer } from '@/lib/server/declaracao-uploads';
+
+const TAG_FIELD_MAP: Record<string, { formKey: string; dbKey: string; parse?: 'date' }[]> = {
+  'RG / CNH': [{ formKey: 'dataNascimento', dbKey: 'dataNascimento', parse: 'date' }],
+  'Título de Eleitor': [{ formKey: 'tituloEleitor', dbKey: 'tituloEleitor' }],
+  'Titulo de Eleitor': [{ formKey: 'tituloEleitor', dbKey: 'tituloEleitor' }],
+  CPF: [{ formKey: 'dataNascimento', dbKey: 'dataNascimento', parse: 'date' }],
+  'Comprovante de residência': [
+    { formKey: 'enderecoCep', dbKey: 'enderecoCep' },
+    { formKey: 'enderecoUf', dbKey: 'enderecoUf' },
+    { formKey: 'enderecoMunicipio', dbKey: 'enderecoMunicipio' },
+    { formKey: 'enderecoBairro', dbKey: 'enderecoBairro' },
+    { formKey: 'enderecoLogradouro', dbKey: 'enderecoLogradouro' },
+    { formKey: 'enderecoNumero', dbKey: 'enderecoNumero' },
+    { formKey: 'enderecoComplemento', dbKey: 'enderecoComplemento' },
+  ],
+  'Comprovante de residencia': [
+    { formKey: 'enderecoCep', dbKey: 'enderecoCep' },
+    { formKey: 'enderecoUf', dbKey: 'enderecoUf' },
+    { formKey: 'enderecoMunicipio', dbKey: 'enderecoMunicipio' },
+    { formKey: 'enderecoBairro', dbKey: 'enderecoBairro' },
+    { formKey: 'enderecoLogradouro', dbKey: 'enderecoLogradouro' },
+    { formKey: 'enderecoNumero', dbKey: 'enderecoNumero' },
+    { formKey: 'enderecoComplemento', dbKey: 'enderecoComplemento' },
+  ],
+  'Informe de rendimentos': [
+    { formKey: 'ocupacaoPrincipal', dbKey: 'ocupacaoPrincipal' },
+    { formKey: 'naturezaOcupacao', dbKey: 'naturezaOcupacao' },
+  ],
+  'Extrato bancário': [
+    { formKey: 'telefone', dbKey: 'telefone' },
+    { formKey: 'email', dbKey: 'email' },
+  ],
+  'Carnê-leão / Recibo autônomo': [
+    { formKey: 'ocupacaoPrincipal', dbKey: 'ocupacaoPrincipal' },
+    { formKey: 'naturezaOcupacao', dbKey: 'naturezaOcupacao' },
+  ],
+};
+
+const DB_TO_MODELO_PATH: Record<string, string> = {
+  nome: 'identificacao.nome_completo',
+  cpf: 'identificacao.cpf',
+  dataNascimento: 'identificacao.data_nascimento',
+  tituloEleitor: 'identificacao.titulo_eleitor',
+  ocupacaoPrincipal: 'identificacao.ocupacao_principal',
+  naturezaOcupacao: 'identificacao.natureza_ocupacao',
+  enderecoCep: 'endereco.cep',
+  enderecoUf: 'endereco.uf',
+  enderecoMunicipio: 'endereco.codigo_municipio_ibge',
+  enderecoBairro: 'endereco.bairro',
+  enderecoLogradouro: 'endereco.logradouro',
+  enderecoNumero: 'endereco.numero',
+  email: 'contato.email',
+  telefone: 'contato.celular',
+};
+
+function normalizeTag(tagRaw: string) {
+  const t = tagRaw.trim().toLowerCase();
+  const map: Record<string, string> = {
+    cpf: 'CPF',
+    'rg / cnh': 'RG / CNH',
+    'rg/cnh': 'RG / CNH',
+    'rg /cnh': 'RG / CNH',
+    'título de eleitor': 'Título de Eleitor',
+    'titulo de eleitor': 'Titulo de Eleitor',
+    'comprovante de residencia': 'Comprovante de residencia',
+    'comprovante de residência': 'Comprovante de residência',
+    'informe de rendimentos': 'Informe de rendimentos',
+    'extrato bancário': 'Extrato bancário',
+    'extrato bancario': 'Extrato bancário',
+    'carnê-leão / recibo autônomo': 'Carnê-leão / Recibo autônomo',
+    'carne-leao / recibo autonomo': 'Carnê-leão / Recibo autônomo',
+    'carnê leão / recibo autônomo': 'Carnê-leão / Recibo autônomo',
+  };
+  return map[t] ?? tagRaw;
+}
+
+async function simulateAIExtraction(tag: string, fileName: string): Promise<Record<string, string>> {
+  const res: Record<string, string> = {};
+  const slug = fileName.toUpperCase();
+
+  const tagNorm = tag.trim().toLowerCase();
+
+  if (tagNorm === 'título de eleitor' || tagNorm === 'titulo de eleitor') {
+    const match = slug.match(/\d{12}/);
+    res['tituloEleitor'] = match ? match[0] : '4590 1283 0192';
+  }
+
+  if (tagNorm === 'cpf' || tagNorm === 'rg / cnh' || tagNorm === 'rg/cnh' || tagNorm === 'rg/cnh') {
+    res['dataNascimento'] = '1985-05-15';
+  }
+
+  if (tagNorm === 'comprovante de residência' || tagNorm === 'comprovante de residencia') {
+    res['enderecoCep'] = '01310-100';
+    res['enderecoUf'] = 'SP';
+    res['enderecoMunicipio'] = 'São Paulo';
+    res['enderecoLogradouro'] = 'Avenida Paulista';
+    res['enderecoNumero'] = '1000';
+  }
+
+  if (tagNorm === 'extrato bancário' || tagNorm === 'extrato bancario') {
+    res['telefone'] = '(11) 99999-9999';
+    res['email'] = 'cliente@example.com';
+    res['_bem_tipo'] = 'bankAccount';
+    res['_bem_valor'] = '50000.00';
+  }
+
+  if (tagNorm === 'informe de rendimentos' || tagNorm === 'informe de rendimentos (empregador)') {
+    res['ocupacaoPrincipal'] = 'Executivo';
+    res['naturezaOcupacao'] = 'Pessoa Física';
+  }
+
+  return res;
+}
+
+async function updateContribuinteFromDocument(
+  contribuinteId: number,
+  tag: string,
+  extractedData: Record<string, string>
+) {
+  const fieldDefs = TAG_FIELD_MAP[tag];
+  if (!fieldDefs || fieldDefs.length === 0) {
+    return { updated: false, fields: [] };
+  }
+
+  const updates: Record<string, unknown> = {};
+
+  for (const def of fieldDefs) {
+    const raw = extractedData[def.formKey];
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+
+    if (def.parse === 'date') {
+      const parsed = new Date(raw.trim());
+      if (!isNaN(parsed.getTime())) {
+        updates[def.dbKey] = parsed;
+      }
+    } else {
+      updates[def.dbKey] = raw.trim();
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await prisma.contribuinte.update({
+      where: { id: contribuinteId },
+      data: updates,
+    });
+    return { updated: true, fields: Object.keys(updates) };
+  }
+
+  return { updated: false, fields: [] };
+}
+
+async function createAssetsFromDocument(
+  declaracaoId: number,
+  tag: string,
+  extractedData: Record<string, string>
+) {
+  const updates: Array<{ type: 'bem' | 'divida'; data: any }> = [];
+
+  if (tag === 'Extrato bancário' && extractedData['_bem_tipo']) {
+    const valor = parseFloat(extractedData['_bem_valor'] || '0');
+    if (valor > 0) {
+      updates.push({
+        type: 'bem',
+        data: {
+          declaracaoId,
+          grupo: 6,
+          codigo: 1,
+          descricao: 'Depósito bancário - Conta poupança',
+          localizacao: 'SP',
+          valorAnterior: valor,
+          valorAtual: valor,
+        },
+      });
+    }
+  }
+
+  if (tag === 'Extrato de previdencia privada') {
+    updates.push({
+      type: 'bem',
+      data: {
+        declaracaoId,
+        grupo: 4,
+        codigo: 1,
+        descricao: 'Fundo de previdência privada',
+        localizacao: 'BR',
+        valorAnterior: 100000,
+        valorAtual: 105000,
+      },
+    });
+  }
+
+  if (tag === 'Recibos medicos / odontologicos') {
+    updates.push({
+      type: 'bem',
+      data: {
+        declaracaoId,
+        grupo: 9,
+        codigo: 5,
+        descricao: 'Despesas médicas e odontológicas do ano',
+        localizacao: 'BR',
+        valorAnterior: 25000,
+        valorAtual: 25000,
+      },
+    });
+  }
+
+  if (updates.length > 0) {
+    for (const update of updates) {
+      if (update.type === 'bem') {
+        await prisma.bemDireito.create({
+          data: update.data,
+        });
+      }
+    }
+  }
+
+  return updates.length > 0;
+}
+
+
 
 function isExpired(date: Date) {
   return date.getTime() < Date.now();

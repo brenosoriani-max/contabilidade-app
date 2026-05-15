@@ -85,11 +85,16 @@ async function simulateAIExtraction(tag: string, fileName: string): Promise<Reco
     res['tituloEleitor'] = match ? match[0] : '4590 1283 0192';
   }
 
-  if (tag === 'CPF' || tag === 'RG / CNH') {
+  const tagNorm = tag.trim().toLowerCase();
+
+  if (tagNorm === 'cpf' || tagNorm === 'rg / cnh' || tagNorm === 'rg/cnh' || tagNorm === 'rg /cnh') {
     res['dataNascimento'] = '1985-05-15';
   }
 
-  if (tag === 'Comprovante de residência' || tag === 'Comprovante de residencia') {
+  if (
+    tagNorm === 'comprovante de residência' ||
+    tagNorm === 'comprovante de residencia'
+  ) {
     res['enderecoCep'] = '01310-100';
     res['enderecoUf'] = 'SP';
     res['enderecoMunicipio'] = 'São Paulo';
@@ -97,14 +102,14 @@ async function simulateAIExtraction(tag: string, fileName: string): Promise<Reco
     res['enderecoNumero'] = '1000';
   }
 
-  if (tag === 'Extrato bancário') {
+  if (tagNorm === 'extrato bancário' || tagNorm === 'extrato bancario') {
     res['telefone'] = '(11) 99999-9999';
     res['email'] = 'cliente@example.com';
     res['_bem_tipo'] = 'bankAccount';
     res['_bem_valor'] = '50000.00';
   }
 
-  if (tag === 'Informe de rendimentos' || tag === 'Informe de rendimentos (empregador)') {
+  if (tagNorm === 'informe de rendimentos' || tagNorm === 'informe de rendimentos (empregador)') {
     res['ocupacaoPrincipal'] = 'Executivo';
     res['naturezaOcupacao'] = 'Pessoa Física';
   }
@@ -274,7 +279,33 @@ export async function POST(
         })
       : null;
 
-    const tag = checklistItem?.nome || 'Outros';
+    const tagRaw = checklistItem?.nome || 'Outros';
+    const tagNormalized = tagRaw.trim().toLowerCase();
+
+    // normaliza o nome do checklist para reduzir falhas por caixa/espaços.
+    // (mantemos mapeamento pequeno e seguro; se não bater, usa o valor original)
+    const tag = (() => {
+      const map: Record<string, string> = {
+        'cpf': 'CPF',
+        'rg / cnh': 'RG / CNH',
+        'rg /cnh': 'RG / CNH',
+        'rg/cnh': 'RG / CNH',
+        'título de eleitor': 'Título de Eleitor',
+        'titulo de eleitor': 'Titulo de Eleitor',
+        'comprovante de residencia': 'Comprovante de residencia',
+        'comprovante de residência': 'Comprovante de residência',
+        'informe de rendimentos': 'Informe de rendimentos',
+        'extrato bancário': 'Extrato bancário',
+        'extrato bancario': 'Extrato bancário',
+        'carnê-leão / recibo autônomo': 'Carnê-leão / Recibo autônomo',
+        'carne-leao / recibo autonomo': 'Carnê-leão / Recibo autônomo',
+        'carnê leão / recibo autônomo': 'Carnê-leão / Recibo autônomo',
+        'titulo de eleitor ': 'Titulo de Eleitor',
+      };
+
+      return map[tagNormalized] ?? tagRaw;
+    })();
+
     const declaracaoId = declaracao?.id ?? null;
 
     for (const file of files) {
@@ -308,14 +339,13 @@ export async function POST(
 
         const { envelope, modelo } = await loadModeloForDeclaracao(declaracaoId);
         const aiData = await simulateAIExtraction(tag, file.name);
-        const updatedModelo = Object.entries(aiData).reduce(
-          (currentModelo, [key, value]) => {
-            if (key.startsWith('_')) return currentModelo;
-            const path = DB_TO_MODELO_PATH[key];
-            return path ? applyFieldEdit(currentModelo, path, value, 'inteligencia_artificial') : currentModelo;
-          },
-          modelo
-        );
+        const updatedModelo = Object.entries(aiData).reduce((currentModelo, [key, value]) => {
+          if (key.startsWith('_')) return currentModelo;
+          const path = DB_TO_MODELO_PATH[key];
+          return path
+            ? applyFieldEdit(currentModelo, path, value, 'inteligencia_artificial')
+            : currentModelo;
+        }, modelo as any);
 
         const nextEnvelope = {
           ...envelope,
