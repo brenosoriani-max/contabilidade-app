@@ -557,9 +557,39 @@ export const ContribuinteDetails = React.memo(
       [declaracaoId]
     )
 
+    const shouldAutoLoadChecklist = activeTab !== "checklist"
+
     useEffect(() => {
-      carregarChecklist()
-    }, [carregarChecklist])
+      // Regra: na aba "checklist" NÃO fazer refresh automático.
+      // Checklist só será atualizado quando o usuário clicar no botão
+      // ("Sincronizar Conferência").
+      if (!shouldAutoLoadChecklist) return
+      if (!declaracaoId) return
+
+      let isCancelled = false
+
+      const run = async () => {
+        setChecklistLoading(true)
+        try {
+          const data = await declaracaoIrpfService.getChecklist(declaracaoId)
+          if (!isCancelled) setChecklist(data)
+        } catch (e: any) {
+          if (!isCancelled) toast.error(e.message || "Erro ao carregar checklist")
+        } finally {
+          if (!isCancelled) setChecklistLoading(false)
+        }
+      }
+
+      run()
+
+      return () => {
+        isCancelled = true
+      }
+    }, [declaracaoId, shouldAutoLoadChecklist])
+
+
+
+
 
     async function handleFieldUpdate(fieldPath: string, value: string) {
       if (!declaracaoId) return
