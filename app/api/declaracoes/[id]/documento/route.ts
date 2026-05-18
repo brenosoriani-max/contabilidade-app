@@ -15,9 +15,10 @@ import {
   storeUploadedFile,
   validateUploadFile,
 } from '@/lib/server/scheduling-details';
+import { parseDocument } from '@/lib/server/anchor-parser';
 import type { DadosJsonEnvelopeV2 } from '@/lib/server/dados-json-declaracao';
 
-// ─── Tipos internos ───────────────────────────────────────────────────────────
+
 
 interface BemDireito {
   codigo_irpf: string;         // ex: "61" (conta corrente), "41" (poupança)
@@ -295,75 +296,6 @@ Código IRPF para veículo = "21".
 
 // ─── Chamada real à Claude API ────────────────────────────────────────────────
 
-async function callClaudeOCR(
-  tag: string,
-  fileBuffer: Buffer,
-  mediaType: string,
-): Promise<ExtractionResult> {
-  const prompt = TAG_PROMPTS[tag];
-
-  // Tag sem prompt definido → retorna vazio
-  if (!prompt) {
-    console.warn(`[OCR] Tag sem prompt: "${tag}"`);
-    return { confianca: 0 };
-  }
-
-  // PDFs não são suportados como imagem inline — retornar vazio por ora
-  // (para PDFs use pdf-parse + enviar o texto extraído como mensagem de texto)
-  if (mediaType === 'application/pdf') {
-    console.warn('[OCR] PDF recebido — extração via imagem não suportada. Implemente extração de texto PDF separada.');
-    return { confianca: 0 };
-  }
-
-  const base64 = fileBuffer.toString('base64');
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY ?? '',
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      system: buildSystemPrompt(),
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/webp',
-                data: base64,
-              },
-            },
-            { type: 'text', text: prompt },
-          ],
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    console.error('[OCR] Claude API error:', err);
-    return { confianca: 0 };
-  }
-
-  const data = await response.json();
-  const raw: string = data?.content?.[0]?.text ?? '{}';
-
-  try {
-    const clean = raw.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean) as ExtractionResult;
-  } catch {
-    console.error('[OCR] JSON parse error:', raw);
-    return { confianca: 0 };
-  }
-}
 
 // ─── Aplica bens[] ao modelo canônico ─────────────────────────────────────────
 
@@ -596,8 +528,11 @@ export async function POST(
     }
     await storeDeclaracaoBuffer(declaracaoId, `[${tag}] ${file.name}`, buffer);
 
-    // ── 2. Chama OCR (Claude) ─────────────────────────────────────
-    const extracted = await callClaudeOCR(tag, buffer, mediaType);
+    // ── 2. Tenta OCR com anchor parser (sem IA) ──────────────────
+    let extracted: any = await parseDocument(tag, buffer, mediaType);
+    
+  
+    
     const confianca = extracted.confianca ?? 0;
 
     // ── 3. Aplica campos simples ao modelo canônico ───────────────
@@ -670,7 +605,7 @@ export async function POST(
     const contribuinteUpdate = await syncContribuinteFromExtraction(
       decl.contribuinteId,
       tag,
-      extracted,
+      extracted as ExtractionResult,
     );
 
     // ── 10. Resumo do que foi extraído ────────────────────────────

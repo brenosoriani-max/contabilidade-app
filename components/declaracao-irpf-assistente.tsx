@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { ExtractionResultBadge } from "@/components/extraction-result-badge";
 
 import { declaracaoIrpfService } from "@/lib/api/services";
 
@@ -41,6 +42,8 @@ const TAGS = [
   "Extrato bancário",
   "Carnê-leão / Recibo autônomo",
   "Nota de corretagem / Informe de investimentos",
+  "CRLV / Documento do veículo",
+  "Título de Eleitor",
 ] as const;
 
 type DeclaracaoIrpfAssistenteProps = {
@@ -48,6 +51,15 @@ type DeclaracaoIrpfAssistenteProps = {
   anoExercicio?: number;
   agendamentoId?: number | null;
 };
+
+interface ExtractionSummary {
+  confianca: number;
+  campos_simples_atualizados: number;
+  bens_criados: number;
+  rendimentos_pj_criados: number;
+  meses_pf_criados: number;
+  alertas_revisao: string[];
+}
 
 export function DeclaracaoIrpfAssistente({
   declaracaoId,
@@ -60,6 +72,7 @@ export function DeclaracaoIrpfAssistente({
   const [docFile, setDocFile] = useState<File | null>(null);
   const [tag, setTag] = useState<string>("");
   const [docLoading, setDocLoading] = useState(false);
+  const [extractionResult, setExtractionResult] = useState<ExtractionSummary | null>(null);
 
   const [checklist, setChecklist] = useState<Record<string, unknown> | null>(null);
   const [checklistLoading, setChecklistLoading] = useState(false);
@@ -105,14 +118,37 @@ export function DeclaracaoIrpfAssistente({
       return;
     }
     setDocLoading(true);
+    setExtractionResult(null);
     try {
-      await declaracaoIrpfService.uploadDocumento(
+      const response = await declaracaoIrpfService.uploadDocumento(
         declaracaoId,
         docFile,
         tag,
         agendamentoId ?? undefined
       );
-      toast.success("Documento anexado.");
+
+      // Captura o resultado da extração
+      if ((response as any)?.extractionSummary) {
+        const summary = (response as any).extractionSummary as ExtractionSummary;
+        setExtractionResult(summary);
+
+        const totalCampos =
+          summary.campos_simples_atualizados +
+          summary.bens_criados +
+          summary.rendimentos_pj_criados +
+          summary.meses_pf_criados;
+
+        toast.success("Documento processado com sucesso!", {
+          description:
+            totalCampos > 0
+              ? `${totalCampos} campo${totalCampos > 1 ? "s" : ""} atualizado${totalCampos > 1 ? "s" : ""} (${Math.round(summary.confianca * 100)}% confiança)`
+              : "Arquivo anexado ao projeto",
+          duration: 5000,
+        });
+      } else {
+        toast.success("Documento anexado.");
+      }
+
       setDocFile(null);
       setTag("");
     } catch (e) {
@@ -241,6 +277,21 @@ export function DeclaracaoIrpfAssistente({
           {docLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Enviar
         </Button>
+
+        {/* Resultado da extração */}
+        {extractionResult && (
+          <ExtractionResultBadge
+            confianca={extractionResult.confianca}
+            origem={extractionResult.confianca >= 0.5 ? "anchor_parser" : "claude_ocr"}
+            camposAtualizados={
+              extractionResult.campos_simples_atualizados +
+              extractionResult.bens_criados +
+              extractionResult.rendimentos_pj_criados +
+              extractionResult.meses_pf_criados
+            }
+            alertas={extractionResult.alertas_revisao}
+          />
+        )}
       </section>
 
       <Separator />

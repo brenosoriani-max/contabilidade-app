@@ -94,6 +94,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ExtractionResultBadge } from "@/components/extraction-result-badge"
 
 /* ───────────────────────────── */
 
@@ -262,6 +263,8 @@ export const ContribuinteDetails = React.memo(
 
     const [docLoading, setDocLoading] =
       useState(false)
+
+    const [extractionResult, setExtractionResult] = useState<any>(null)
 
     const [checklist, setChecklist] =
       useState<Checklist | null>(null)
@@ -484,6 +487,7 @@ export const ContribuinteDetails = React.memo(
 
       const finalTag = tag === "Outros" ? customTag || "Outros" : tag
       setDocLoading(true)
+      setExtractionResult(null)
 
       try {
         const res = await declaracaoIrpfService.uploadDocumento(
@@ -492,7 +496,25 @@ export const ContribuinteDetails = React.memo(
           finalTag
         )
 
-        if (res.contribuinteAtualizado?.updated) {
+        // Captura o resultado da extração
+        if ((res as any)?.extractionSummary) {
+          const summary = (res as any).extractionSummary
+          setExtractionResult(summary)
+
+          const totalCampos =
+            summary.campos_simples_atualizados +
+            summary.bens_criados +
+            summary.rendimentos_pj_criados +
+            summary.meses_pf_criados
+
+          toast.success(
+            `Documento ${finalTag} processado!`,
+            {
+              description: `${totalCampos} campo${totalCampos > 1 ? "s" : ""} atualizado${totalCampos > 1 ? "s" : ""} (${Math.round(summary.confianca * 100)}% confiança)`,
+              duration: 6000,
+            }
+          )
+        } else if (res.contribuinteAtualizado?.updated) {
           toast.success(
             `Documento ${finalTag} processado pela IA!`,
             {
@@ -1081,6 +1103,21 @@ export const ContribuinteDetails = React.memo(
                     {docLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
                     EFETUAR UPLOAD AGORA
                   </Button>
+
+                  {/* Resultado da extração */}
+                  {extractionResult && (
+                    <ExtractionResultBadge
+                      confianca={extractionResult.confianca}
+                      origem={extractionResult.confianca >= 0.5 ? "anchor_parser" : "claude_ocr"}
+                      camposAtualizados={
+                        extractionResult.campos_simples_atualizados +
+                        extractionResult.bens_criados +
+                        extractionResult.rendimentos_pj_criados +
+                        extractionResult.meses_pf_criados
+                      }
+                      alertas={extractionResult.alertas_revisao}
+                    />
+                  )}
                 </CardContent>
               </Card>
 
