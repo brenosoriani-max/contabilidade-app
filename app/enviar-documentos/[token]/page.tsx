@@ -306,6 +306,7 @@ export default function EnviarDocumentosPage() {
                   alt="CONTEC"
                   width={44}
                   height={44}
+                  style={{ height: "auto" }}
                 />
 
                 <div>

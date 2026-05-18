@@ -1,16 +1,4 @@
-/**
- * anchor-parser.ts
- *
- * Extração de documentos IRPF sem IA e sem regex frágil.
- * Usa "âncoras de texto" — os próprios rótulos do documento.
- *
- * Instalar: npm install pdf-parse
- *            npm install --save-dev @types/pdf-parse
- *
- * Para imagens (RG, CNH): npm install tesseract.js
- */
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface ExtractionResult {
   dataNascimento?: string;
@@ -30,6 +18,8 @@ export interface ExtractionResult {
   bens?: BemDireito[];
   rendimentos_pf_mensal?: RendimentoPFMes[];
   confianca: number;
+  tipoDocumento?: string;
+  avisos?: string[];
 }
 
 export interface RendimentoPJ {
@@ -85,6 +75,13 @@ function normalizeText(raw: string): string {
     .trim();
 }
 
+function foldText(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
 /**
  * Busca um rótulo âncora no texto e retorna a string que vem depois dele.
  * afterLines: quantas linhas depois do rótulo procurar o valor (padrão: 0 = mesma linha ou próxima)
@@ -113,6 +110,9 @@ function afterAnchor(
  */
 function parseMoney(raw: string | null): number {
   if (!raw) return 0;
+  const money = extractMoneyValues(raw)[0];
+  if (money !== undefined) return money;
+
   const cleaned = raw
     .replace(/R\$\s*/g, '')
     .replace(/\./g, '')        // remove pontos de milhar
@@ -120,6 +120,24 @@ function parseMoney(raw: string | null): number {
     .trim();
   const val = parseFloat(cleaned);
   return isNaN(val) ? 0 : val;
+}
+
+function extractMoneyValues(raw: string | null): number[] {
+  if (!raw) return [];
+
+  const matches = raw.match(/-?\s*(?:R\$\s*)?\d{1,3}(?:\.\d{3})*,\d{2}|-?\s*(?:R\$\s*)?\d+,\d{2}/g) ?? [];
+
+  return matches
+    .map((match) => {
+      const cleaned = match
+        .replace(/R\$\s*/g, '')
+        .replace(/\s/g, '')
+        .replace(/\./g, '')
+        .replace(',', '.');
+      const value = Number(cleaned);
+      return Number.isFinite(value) ? value : null;
+    })
+    .filter((value): value is number => value !== null);
 }
 
 /**
@@ -164,13 +182,73 @@ function extractDate(text: string | null): string | null {
 
 // ─── Extração de texto do PDF ─────────────────────────────────────────────────
 
+let pdfWorkerSrcPromise: Promise<string | null> | null = null;
+
+function resolvePdfWorkerSrc(): Promise<string | null> {
+  pdfWorkerSrcPromise ??= (async () => {
+    try {
+      const [{ createRequire }, { pathToFileURL }] = await Promise.all([
+        import('node:module'),
+        import('node:url'),
+      ]);
+      const require = createRequire(`${process.cwd()}/`);
+      return pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;
+    } catch (err) {
+      console.warn('[anchor-parser] pdf.worker.mjs não localizado:', err);
+      return null;
+    }
+  })();
+
+  return pdfWorkerSrcPromise;
+}
+
 export async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
     // Importação dinâmica para evitar erros de build quando pdf-parse não está instalado
     const pdfParseModule: any = await import('pdf-parse');
-    const pdfParse = typeof pdfParseModule === 'function' ? pdfParseModule : pdfParseModule.default || pdfParseModule;
-    const data = await pdfParse(buffer);
-    return normalizeText(data.text ?? '');
+
+    // pdf-parse v1 exportava uma função; v2 exporta a classe PDFParse.
+    const legacyPdfParse =
+      typeof pdfParseModule?.default === 'function'
+        ? pdfParseModule.default
+        : typeof pdfParseModule === 'function'
+          ? pdfParseModule
+          : typeof pdfParseModule?.default?.default === 'function'
+            ? pdfParseModule.default.default
+            : null;
+
+    if (legacyPdfParse) {
+      const data = await legacyPdfParse(buffer);
+      return normalizeText(data?.text ?? '');
+    }
+
+    const PDFParse =
+      typeof pdfParseModule?.PDFParse === 'function'
+        ? pdfParseModule.PDFParse
+        : typeof pdfParseModule?.default?.PDFParse === 'function'
+          ? pdfParseModule.default.PDFParse
+          : null;
+
+    if (!PDFParse) {
+      throw new Error(`pdf-parse export não reconhecido. exports: ${Object.keys(pdfParseModule || {}).join(',')}`);
+    }
+
+    const workerSrc = await resolvePdfWorkerSrc();
+    if (workerSrc && typeof PDFParse.setWorker === 'function') {
+      PDFParse.setWorker(workerSrc);
+    }
+
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const data = await parser.getText();
+      return normalizeText(data?.text ?? '');
+    } finally {
+      try {
+        await parser.destroy?.();
+      } catch (destroyErr) {
+        console.warn('[anchor-parser] pdf-parse destroy erro:', destroyErr);
+      }
+    }
   } catch (err) {
     console.error('[anchor-parser] pdf-parse erro:', err);
     return '';
@@ -247,7 +325,7 @@ function parseInformeRendimentos(text: string): ExtractionResult {
     confianca,
   };
 
-  return { rendimentos_pj: [rendimento], confianca };
+  return { rendimentos_pj: [rendimento], confianca, tipoDocumento: 'informe_rendimentos_pj' };
 }
 
 // ─── 2. Comprovante de Residência (PDF) ──────────────────────────────────────
@@ -282,13 +360,123 @@ function parseComprovante(text: string): ExtractionResult {
     enderecoUf: uf ?? undefined,
     enderecoLogradouro: logradouro?.split('\n')[0].trim() ?? undefined,
     confianca,
+    tipoDocumento: 'comprovante_residencia',
   };
 }
 
 // ─── 3. Extrato Bancário (PDF) ───────────────────────────────────────────────
 
-function parseExtratoBancario(text: string): ExtractionResult {
+function findBancoName(text: string): string {
+  const nomeEmpresarial = afterAnchor(text, 'Nome Empresarial', { maxChars: 100 });
+  if (nomeEmpresarial && /banco|financeira|corretora|institui/i.test(nomeEmpresarial)) {
+    return nomeEmpresarial.split('\n')[0].trim();
+  }
+
+  const line = text
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => /banco|financeira|corretora|institui/i.test(l));
+
+  return line || 'INSTITUICAO FINANCEIRA NAO IDENTIFICADA';
+}
+
+function pushBankAsset(
+  bens: BemDireito[],
+  seen: Set<string>,
+  data: Omit<BemDireito, 'status'>,
+) {
+  const key = `${data.grupo}|${data.codigo_irpf}|${foldText(data.discriminacao)}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  bens.push({ ...data, status: 'sugerido' });
+}
+
+function extractBankBens(text: string, fonte: string): BemDireito[] {
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+  const banco = findBancoName(text);
+  const cnpjBanco = extractCnpj(text);
+  const agencia = text.match(/Ag[eê]ncia[:\s]+(\d{3,6})/i)?.[1] ?? null;
+  const conta = text.match(/Conta[:\s]+(\d{3,12}-?\d?)/i)?.[1] ?? null;
   const bens: BemDireito[] = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < lines.length; i++) {
+    const windowText = [lines[i], lines[i + 1], lines[i + 2]].filter(Boolean).join(' ');
+    const folded = foldText(windowText);
+    const values = extractMoneyValues(windowText);
+    if (values.length === 0) continue;
+
+    const valorAtual = values[values.length - 1];
+    const valorAnterior = values.length > 1 ? values[values.length - 2] : null;
+
+    if (/conta corrente|deposito.*vista|depositos.*vista/.test(folded)) {
+      pushBankAsset(bens, seen, {
+        codigo_irpf: '61',
+        grupo: 'G6',
+        discriminacao: [
+          'SALDO EM CONTA CORRENTE',
+          banco.toUpperCase().trim(),
+          agencia ? `AG ${agencia}` : null,
+          conta ? `CONTA ${conta}` : null,
+        ].filter(Boolean).join(' - '),
+        valor_anterior: valorAnterior,
+        valor_atual: valorAtual,
+        cnpj: cnpjBanco ?? undefined,
+        fonte,
+        confianca: 0.85,
+      });
+      continue;
+    }
+
+    if (/poupanca|poupan/.test(folded)) {
+      pushBankAsset(bens, seen, {
+        codigo_irpf: '41',
+        grupo: 'G4',
+        discriminacao: `SALDO DE POUPANCA - ${banco.toUpperCase().trim()}`,
+        valor_anterior: valorAnterior,
+        valor_atual: valorAtual,
+        cnpj: cnpjBanco ?? undefined,
+        fonte,
+        confianca: 0.85,
+      });
+      continue;
+    }
+
+    if (/cdb|rdb|lci|lca|letra de credito|renda fixa|aplicac/.test(folded)) {
+      pushBankAsset(bens, seen, {
+        codigo_irpf: '45',
+        grupo: 'G4',
+        discriminacao: `APLICACAO FINANCEIRA - ${lines[i].slice(0, 120).toUpperCase()}`,
+        valor_anterior: valorAnterior,
+        valor_atual: valorAtual,
+        cnpj: cnpjBanco ?? undefined,
+        fonte,
+        confianca: 0.75,
+      });
+    }
+  }
+
+  return bens;
+}
+
+function parseInformeBancario(text: string): ExtractionResult {
+  const bens = extractBankBens(text, 'anchor_informe_bancario_pdf');
+
+  return {
+    bens,
+    confianca: bens.length > 0 ? 0.85 : 0.3,
+    tipoDocumento: 'informe_bancario',
+    avisos: bens.length > 0 ? undefined : ['Informe bancario sem bloco de bens/saldos reconhecido.'],
+  };
+}
+
+function looksLikeBankInforme(text: string): boolean {
+  const folded = foldText(text);
+  return /bens e direitos|saldo em 31\/12|conta corrente|poupanca|rendimentos financeiros|informe de rendimentos financeiros|cdb|rdb|lci|lca/.test(folded);
+}
+
+function parseExtratoBancario(text: string): ExtractionResult {
+  const bens: BemDireito[] = extractBankBens(text, 'anchor_extrato_pdf');
 
   // Nome do banco
   const banco = afterAnchor(text, 'Banco ')
@@ -300,7 +488,7 @@ function parseExtratoBancario(text: string): ExtractionResult {
   // Conta corrente
   const saldoCCRaw = afterAnchor(text, 'Conta Corrente')
                   ?? afterAnchor(text, 'CONTA CORRENTE');
-  if (saldoCCRaw) {
+  if (saldoCCRaw && !bens.some((b) => b.codigo_irpf === '61')) {
     const agencia = text.match(/Ag[eê]ncia[:\s]+(\d{4,5})/i)?.[1] ?? null;
     const conta   = text.match(/Conta[:\s]+(\d{4,8}-?\d?)/i)?.[1] ?? null;
     bens.push({
@@ -325,7 +513,7 @@ function parseExtratoBancario(text: string): ExtractionResult {
   const saldoPoupRaw = afterAnchor(text, 'Poupança')
                     ?? afterAnchor(text, 'POUPANÇA')
                     ?? afterAnchor(text, 'Poupanca');
-  if (saldoPoupRaw) {
+  if (saldoPoupRaw && !bens.some((b) => b.codigo_irpf === '41')) {
     bens.push({
       codigo_irpf: '41',
       grupo: 'G4',
@@ -339,7 +527,7 @@ function parseExtratoBancario(text: string): ExtractionResult {
     });
   }
 
-  return { bens, confianca: bens.length > 0 ? 0.85 : 0.4 };
+  return { bens, confianca: bens.length > 0 ? 0.85 : 0.4, tipoDocumento: 'extrato_bancario' };
 }
 
 // ─── 4. Carnê-Leão / Recibo Autônomo (PDF) ───────────────────────────────────
@@ -413,6 +601,7 @@ function parseCrlv(text: string): ExtractionResult {
       confianca,
     }],
     confianca,
+    tipoDocumento: 'crlv',
   };
 }
 
@@ -420,15 +609,24 @@ function parseCrlv(text: string): ExtractionResult {
 // Para usar: npm install tesseract.js
 // Tesseract extrai o texto da imagem → mesmo parser de âncoras
 
+async function importOptionalRuntimeModule(moduleName: string): Promise<any | null> {
+  try {
+    const runtimeImport = Function('moduleName', 'return import(moduleName)') as (
+      moduleName: string,
+    ) => Promise<any>;
+
+    return await runtimeImport(moduleName);
+  } catch {
+    return null;
+  }
+}
+
 async function extractImageText(buffer: Buffer): Promise<string> {
   try {
-    // Importação dinâmica — só carrega se tiver tesseract.js instalado
-    // Se não estiver instalado, retorna string vazia (fallback para Claude OCR)
-    let Tesseract: any;
-    try {
-      // @ts-ignore - tesseract.js é opcional
-      Tesseract = await import('tesseract.js');
-    } catch {
+    // Importação indireta: mantém tesseract.js opcional sem quebrar o bundle do Next.
+    const Tesseract = await importOptionalRuntimeModule('tesseract.js');
+
+    if (!Tesseract) {
       console.warn('[anchor-parser] tesseract.js não instalado. Use: npm install tesseract.js');
       return '';
     }
@@ -451,6 +649,7 @@ function parseRgCnh(text: string): ExtractionResult {
   return {
     dataNascimento: date ?? undefined,
     confianca: date ? 0.85 : 0.4,
+    tipoDocumento: 'rg_cnh',
   };
 }
 
@@ -463,6 +662,7 @@ function parseTituloEleitor(text: string): ExtractionResult {
   return {
     tituloEleitor: titulo ?? undefined,
     confianca: titulo ? 0.85 : 0.4,
+    tipoDocumento: 'titulo_eleitor',
   };
 }
 
@@ -488,7 +688,26 @@ export async function parseDocument(
 
     switch (tag) {
       case 'Informe de rendimentos':
+        if (looksLikeBankInforme(text)) {
+          const bancario = parseInformeBancario(text);
+          if ((bancario.bens?.length ?? 0) > 0) return bancario;
+        }
         return parseInformeRendimentos(text);
+
+      case 'Informe de rendimentos bancarios': {
+        const bancario = parseInformeBancario(text);
+        if ((bancario.bens?.length ?? 0) > 0) return bancario;
+
+        console.warn('[anchor-parser] Tag bancaria, mas sem bens/saldos reconhecidos; tentando parser de rendimento PJ.');
+        const pj = parseInformeRendimentos(text);
+        return {
+          ...pj,
+          avisos: [
+            ...(pj.avisos ?? []),
+            'Documento com tag bancaria nao possui bloco de bens/saldos reconhecido.',
+          ],
+        };
+      }
 
       case 'Comprovante de residência':
       case 'Comprovante de residencia':
