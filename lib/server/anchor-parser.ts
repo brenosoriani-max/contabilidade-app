@@ -409,10 +409,30 @@ function extractBankBens(text: string, fonte: string): BemDireito[] {
     const valorAtual = values[values.length - 1];
     const valorAnterior = values.length > 1 ? values[values.length - 2] : null;
 
+    const colMatch = lines[i].match(/^(?:[\d/A-Z-]+)?\s+(\d{2})\s+(\d{2})\s+(.+?)(?:\s+[\d.,]+)*$/i);
+    let extractedGrupo = colMatch ? colMatch[1] : null;
+    let extractedCodigo = colMatch ? colMatch[2] : null;
+    let extractedDesc = colMatch ? colMatch[3].trim() : lines[i].slice(0, 120).toUpperCase();
+
+    // If we confidently extracted Grupo and Código from the columns:
+    if (extractedGrupo && extractedCodigo && values.length >= 2) {
+      pushBankAsset(bens, seen, {
+        codigo_irpf: extractedCodigo,
+        grupo: `G${parseInt(extractedGrupo, 10)}`,
+        discriminacao: extractedDesc,
+        valor_anterior: valorAnterior,
+        valor_atual: valorAtual,
+        cnpj: cnpjBanco ?? undefined,
+        fonte,
+        confianca: 0.9,
+      });
+      continue;
+    }
+
     if (/conta corrente|deposito.*vista|depositos.*vista/.test(folded)) {
       pushBankAsset(bens, seen, {
-        codigo_irpf: '61',
-        grupo: 'G6',
+        codigo_irpf: extractedCodigo || '01',
+        grupo: extractedGrupo ? `G${parseInt(extractedGrupo, 10)}` : 'G6',
         discriminacao: [
           'SALDO EM CONTA CORRENTE',
           banco.toUpperCase().trim(),
@@ -430,9 +450,9 @@ function extractBankBens(text: string, fonte: string): BemDireito[] {
 
     if (/poupanca|poupan/.test(folded)) {
       pushBankAsset(bens, seen, {
-        codigo_irpf: '41',
-        grupo: 'G4',
-        discriminacao: `SALDO DE POUPANCA - ${banco.toUpperCase().trim()}`,
+        codigo_irpf: extractedCodigo || '01',
+        grupo: extractedGrupo ? `G${parseInt(extractedGrupo, 10)}` : 'G4',
+        discriminacao: `SALDO DE POUPANÇA - ${banco.toUpperCase().trim()}`,
         valor_anterior: valorAnterior,
         valor_atual: valorAtual,
         cnpj: cnpjBanco ?? undefined,
@@ -444,15 +464,16 @@ function extractBankBens(text: string, fonte: string): BemDireito[] {
 
     if (/cdb|rdb|lci|lca|letra de credito|renda fixa|aplicac/.test(folded)) {
       pushBankAsset(bens, seen, {
-        codigo_irpf: '45',
-        grupo: 'G4',
-        discriminacao: `APLICACAO FINANCEIRA - ${lines[i].slice(0, 120).toUpperCase()}`,
+        codigo_irpf: extractedCodigo || '03', // 03 is generally fixed income in group 04
+        grupo: extractedGrupo ? `G${parseInt(extractedGrupo, 10)}` : 'G4',
+        discriminacao: `APLICAÇÃO FINANCEIRA - ${lines[i].slice(0, 120).toUpperCase()}`,
         valor_anterior: valorAnterior,
         valor_atual: valorAtual,
         cnpj: cnpjBanco ?? undefined,
         fonte,
         confianca: 0.75,
       });
+      continue;
     }
   }
 
@@ -677,80 +698,67 @@ export async function parseDocument(
   mediaType: string,
 ): Promise<ExtractionResult> {
 
-  // ── PDFs: extrai texto primeiro ──────────────────────────────────────────
+  let text = '';
+  
   if (mediaType === 'application/pdf') {
-    const text = await extractPdfText(buffer);
-
+    text = await extractPdfText(buffer);
     if (!text.trim()) {
       console.warn(`[anchor-parser] PDF sem texto (tag: ${tag}). Arquivo pode ser scan.`);
-      return { confianca: 0 };
     }
+  } else if (mediaType.startsWith('image/')) {
+    text = await extractImageText(buffer);
+  } else {
+    return { confianca: 0 };
+  }
 
-    switch (tag) {
-      case 'Informe de rendimentos':
-        if (looksLikeBankInforme(text)) {
-          const bancario = parseInformeBancario(text);
-          if ((bancario.bens?.length ?? 0) > 0) return bancario;
-        }
-        return parseInformeRendimentos(text);
+  if (!text.trim()) return { confianca: 0 };
 
-      case 'Informe de rendimentos bancarios': {
+  switch (tag) {
+    case 'Informe de rendimentos':
+      if (looksLikeBankInforme(text)) {
         const bancario = parseInformeBancario(text);
         if ((bancario.bens?.length ?? 0) > 0) return bancario;
-
-        console.warn('[anchor-parser] Tag bancaria, mas sem bens/saldos reconhecidos; tentando parser de rendimento PJ.');
-        const pj = parseInformeRendimentos(text);
-        return {
-          ...pj,
-          avisos: [
-            ...(pj.avisos ?? []),
-            'Documento com tag bancaria nao possui bloco de bens/saldos reconhecido.',
-          ],
-        };
       }
+      return parseInformeRendimentos(text);
 
-      case 'Comprovante de residência':
-      case 'Comprovante de residencia':
-        return parseComprovante(text);
+    case 'Informe de rendimentos bancarios': {
+      const bancario = parseInformeBancario(text);
+      if ((bancario.bens?.length ?? 0) > 0) return bancario;
 
-      case 'Extrato bancário':
-        return parseExtratoBancario(text);
-
-      case 'Carnê-leão / Recibo autônomo':
-        return parseCarneleao(text);
-
-      case 'CRLV / Documento do veículo':
-        return parseCrlv(text);
-
-      default:
-        console.warn(`[anchor-parser] Tag sem parser para PDF: "${tag}"`);
-        return { confianca: 0 };
+      console.warn('[anchor-parser] Tag bancaria, mas sem bens/saldos reconhecidos; tentando parser de rendimento PJ.');
+      const pj = parseInformeRendimentos(text);
+      return {
+        ...pj,
+        avisos: [
+          ...(pj.avisos ?? []),
+          'Documento com tag bancaria nao possui bloco de bens/saldos reconhecido.',
+        ],
+      };
     }
+
+    case 'Comprovante de residência':
+    case 'Comprovante de residencia':
+      return parseComprovante(text);
+
+    case 'Extrato bancário':
+      return parseExtratoBancario(text);
+
+    case 'Carnê-leão / Recibo autônomo':
+      return parseCarneleao(text);
+
+    case 'CRLV / Documento do veículo':
+      return parseCrlv(text);
+
+    case 'RG / CNH':
+      return parseRgCnh(text);
+
+    case 'Título de Eleitor':
+    case 'Titulo de Eleitor':
+      return parseTituloEleitor(text);
+
+    default:
+      console.warn(`[anchor-parser] Tag sem parser: "${tag}"`);
+      return { confianca: 0 };
   }
-
-  // ── Imagens: Tesseract → texto → parser ─────────────────────────────
-  if (mediaType.startsWith('image/')) {
-    const text = await extractImageText(buffer);
-
-    if (!text.trim()) return { confianca: 0 };
-
-    switch (tag) {
-      case 'RG / CNH':
-        return parseRgCnh(text);
-
-      case 'Título de Eleitor':
-      case 'Titulo de Eleitor':
-        return parseTituloEleitor(text);
-
-      case 'Comprovante de residência':
-      case 'Comprovante de residencia':
-        return parseComprovante(text);
-
-      default:
-        console.warn(`[anchor-parser] Tag sem parser para imagem: "${tag}"`);
-        return { confianca: 0 };
-    }
-  }
-
-  return { confianca: 0 };
 }
+
