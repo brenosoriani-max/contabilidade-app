@@ -791,65 +791,13 @@ export const ContribuinteDetails = React.memo(
         {/* TABS CONTAINER */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="grid w-full grid-cols-5 h-12 bg-muted/30 p-1 rounded-xl">
-            <TabsTrigger value="geral" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs">Visão Geral</TabsTrigger>
             <TabsTrigger value="dados" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs">Dados</TabsTrigger>
             <TabsTrigger value="checklist" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs">Checklist IR</TabsTrigger>
             <TabsTrigger value="documentos" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs">Documentos</TabsTrigger>
             <TabsTrigger value="bens" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs">Bens</TabsTrigger>
           </TabsList>
  
-          {/* TAB: VISÃO GERAL */}
-          <TabsContent value="geral" className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-3">
-               <Card className="md:col-span-2 border-none shadow-sm bg-gradient-to-br from-primary/5 to-transparent">
-                  <CardHeader>
-                    <CardTitle className="text-lg font-bold">Audit Journal - Insights Fiscais</CardTitle>
-                    <CardDescription>Resumo de riscos e validações automáticas</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                     <div className="flex items-start gap-3 p-4 rounded-xl bg-background border border-amber-100 shadow-sm">
-                        <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                        <div>
-                           <p className="text-sm font-bold text-amber-900">Risco de Malha Fina: Médio</p>
-                           <p className="text-xs text-amber-700/80 mt-1">A variação patrimonial ({formatPercent(variationPercent)}) está acima da média histórica para este nível de rendimento. Verifique a origem dos recursos.</p>
-                        </div>
-                     </div>
-                     <div className="flex items-start gap-3 p-4 rounded-xl bg-background border border-emerald-100 shadow-sm">
-                        <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                        <div>
-                           <p className="text-sm font-bold text-emerald-900">Cruzamento de Rendimentos</p>
-                           <p className="text-xs text-emerald-700/80 mt-1">Todos os informes de rendimentos recebidos via PDF foram sincronizados com sucesso.</p>
-                        </div>
-                     </div>
-                  </CardContent>
-               </Card>
- 
-               <Card className="border-none shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="text-lg font-bold">Resumo Financeiro</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                     <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                           <span className="text-muted-foreground font-medium">Bens 2023</span>
-                           <span className="font-bold">{formatCurrency(declaration?.totalBensAnterior || 0)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                           <span className="text-muted-foreground font-medium">Bens 2024</span>
-                           <span className="font-bold text-primary">{formatCurrency(declaration?.totalBensAtual || 0)}</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-muted rounded-full">
-                           <div className="h-full bg-primary rounded-full" style={{ width: '70%' }} />
-                        </div>
-                     </div>
-                     <Button className="w-full rounded-xl font-bold" variant="outline" onClick={() => handleTabChange("bens")}>
-                        Ver Todos os Bens
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                     </Button>
-                  </CardContent>
-               </Card>
-            </div>
-          </TabsContent>
+    
  
           {/* TAB: DADOS */}
           <TabsContent value="dados">

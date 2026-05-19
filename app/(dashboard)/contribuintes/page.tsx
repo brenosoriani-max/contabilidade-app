@@ -432,139 +432,165 @@ export default function ContribuintesPage() {
             </div>
           </CardContent>
         </Card>
+<Card>
+  <CardContent className="overflow-hidden p-0">
+    {isLoading ? (
+      <div className="space-y-3 p-6">
+        {Array.from({
+          length: 6,
+        }).map((_, i) => (
+          <Skeleton
+            key={i}
+            className="h-16 w-full rounded-xl"
+          />
+        ))}
+      </div>
+    ) : error ? (
+      <div className="flex h-40 items-center justify-center text-muted-foreground">
+        Erro ao carregar contribuintes
+      </div>
+    ) : (
+      <div className="overflow-x-auto">
+        <Table className="min-w-full">
+          <TableHeader>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead className="h-14 px-6 text-center font-semibold">
+                CPF
+              </TableHead>
 
-        <Card>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="space-y-3 p-6">
-                {Array.from({
-                  length: 6,
-                }).map((_, i) => (
-                  <Skeleton
-                    key={i}
-                    className="h-14 w-full"
-                  />
-                ))}
-              </div>
-            ) : error ? (
-              <div className="flex h-40 items-center justify-center text-muted-foreground">
-                Erro ao carregar contribuintes
-              </div>
+              <TableHead className="h-14 px-6 font-semibold">
+                Nome
+              </TableHead>
+
+              <TableHead className="h-14 px-6 text-center font-semibold">
+                Exercício
+              </TableHead>
+
+              <TableHead className="h-14 px-6 text-center font-semibold">
+                Rendimentos
+              </TableHead>
+
+              <TableHead className="h-14 px-6 text-center font-semibold">
+                Status
+              </TableHead>
+
+              <TableHead className="w-[80px]" />
+            </TableRow>
+          </TableHeader>
+
+          <TableBody>
+            {declarations.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  Nenhum contribuinte encontrado
+                </TableCell>
+              </TableRow>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>
-                      CPF
-                    </TableHead>
+              declarations.map((declaration) => (
+                <TableRow
+                  key={`${declaration.contribuinteId}-${declaration.id}`}
+                  className="h-16 border-b transition-colors hover:bg-muted/30"
+                >
+                  <TableCell className="px-6 text-center font-medium">
+                    {formatCPF(
+                      declaration.cpf
+                    )}
+                  </TableCell>
 
-                    <TableHead>
-                      Nome
-                    </TableHead>
+                  <TableCell className="px-6">
+                    <div className="flex flex-col">
+                      <span className="font-medium">
+                        {declaration.nome}
+                      </span>
 
-                    <TableHead>
-                      Exercício
-                    </TableHead>
+                      <span className="text-xs text-muted-foreground">
+                        {declaration.uf ||
+                          "Sem UF"}
+                      </span>
+                    </div>
+                  </TableCell>
 
-                    <TableHead>
-                      Rendimentos
-                    </TableHead>
+                  <TableCell className="px-6 text-center">
+                    <Badge
+                      variant="outline"
+                      className="rounded-full px-3 py-1"
+                    >
+                      {
+                        declaration.exercicio
+                      }
+                    </Badge>
+                  </TableCell>
 
-                    <TableHead>
-                      Status
-                    </TableHead>
+                  <TableCell className="px-6 text-center font-medium">
+                    {formatCurrency(
+                      declaration.totalRendPJ
+                    )}
+                  </TableCell>
 
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
+                  <TableCell className="px-6 text-center">
+                    <Badge
+                      className={`${getResultColor(
+                        declaration.resultadoDeclaracao
+                      )} px-3 py-1 rounded-full`}
+                    >
+                      {getResultLabel(
+                        declaration.resultadoDeclaracao
+                      )}
+                    </Badge>
+                  </TableCell>
 
-                <TableBody>
-                  {declarations.map(
-                    (declaration) => (
-                      <TableRow
-                        key={`${declaration.contribuinteId}-${declaration.id}`}
+                  <TableCell className="px-4 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        asChild
                       >
-                        <TableCell>
-                          {formatCPF(
-                            declaration.cpf
-                          )}
-                        </TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="rounded-full"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
 
-                        <TableCell>
-                          {declaration.nome}
-                        </TableCell>
-
-                        <TableCell>
-                          {
-                            declaration.exercicio
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleView(
+                              declaration
+                            )
                           }
-                        </TableCell>
+                        >
+                          <Eye className="mr-2 h-4 w-4" />
+                          Visualizar
+                        </DropdownMenuItem>
 
-                        <TableCell>
-                          {formatCurrency(
-                            declaration.totalRendPJ
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          <Badge
-                            className={getResultColor(
-                              declaration.resultadoDeclaracao
-                            )}
-                          >
-                            {getResultLabel(
-                              declaration.resultadoDeclaracao
-                            )}
-                          </Badge>
-                        </TableCell>
-
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              asChild
-                            >
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleView(
-                                    declaration
-                                  )
-                                }
-                              >
-                                <Eye className="mr-2 h-4 w-4" />
-                                Visualizar
-                              </DropdownMenuItem>
-
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleDeleteModal(
-                                    declaration
-                                  )
-                                }
-                                className="text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Excluir
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  )}
-                </TableBody>
-              </Table>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleDeleteModal(
+                              declaration
+                            )
+                          }
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
             )}
-          </CardContent>
-        </Card>
+          </TableBody>
+        </Table>
+      </div>
+    )}
+  </CardContent>
+</Card>
       </main>
 
       {deleteConfirm && (
