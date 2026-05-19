@@ -48,11 +48,7 @@ const navItems = [
     url: "/contribuintes",
     icon: Users,
   },
-  {
-    title: "IRPF",
-    url: "/irpf",
-    icon: ListChecks,
-  },
+
   {
     title: "Importar XML",
     url: "/importar",

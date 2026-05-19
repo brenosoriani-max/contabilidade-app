@@ -133,7 +133,6 @@ const GRUPOS_BENS: Record<string, string> = {
   "09": "Outros",
 }
 
-/* ───────────────────────────── */
 
 function StatCard({ title, value, icon }: { title: string; value: string; icon: ReactNode }) {
   return (
