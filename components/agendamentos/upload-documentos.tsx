@@ -3,8 +3,6 @@
 import { useMemo, useState } from "react";
 import { FileText, Loader2, Trash2, Eye, Download } from "lucide-react";
 
-
-
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -34,7 +32,6 @@ import type {
   SchedulingChecklistItem,
   SchedulingDocument,
 } from "@/types";
-
 
 type UploadDocumentosProps = {
   agendamentoId: number;
@@ -185,144 +182,159 @@ export function UploadDocumentos({
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-4">
-      
-      <div className="rounded-lg border bg-background p-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_220px] md:items-end">
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Arquivos</div>
-            <Input
-              type="file"
-              multiple
-              accept=".pdf,.jpg,.jpeg,.png,.xml,application/pdf,image/jpeg,image/png,application/xml,text/xml"
-              onChange={(event) => {
-                void handleUpload(event.target.files);
-                event.target.value = "";
-              }}
-              disabled={uploading}
-            />
+      <div className="space-y-6">
+        <div className="rounded-2xl border-2 border-slate-100 bg-white p-6 shadow-sm">
+          <div className="grid gap-6 md:grid-cols-[1fr_240px] md:items-end">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
+                <FileText className="h-3.5 w-3.5" />
+                Selecionar Arquivos
+              </div>
+              <Input
+                type="file"
+                multiple
+                className="h-12 border-2 border-dashed border-slate-200 bg-slate-50/50 p-2 hover:border-primary/50 hover:bg-white transition-all cursor-pointer"
+                accept=".pdf,.jpg,.jpeg,.png,.xml,application/pdf,image/jpeg,image/png,application/xml,text/xml"
+                onChange={(event) => {
+                  void handleUpload(event.target.files);
+                  event.target.value = "";
+                }}
+                disabled={uploading}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
+                Checklist
+              </div>
+              <Select
+                value={selectedChecklistItemId}
+                onValueChange={setSelectedChecklistItemId}
+                disabled={uploading}
+              >
+                <SelectTrigger className="h-12 rounded-xl border-2 border-slate-100 bg-slate-50/30 font-bold text-slate-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-2">
+                  <SelectItem value="none" className="font-bold">Sem vínculo direto</SelectItem>
+                  {checklist.map((item) => (
+                    <SelectItem key={item.id} value={String(item.id)} className="font-medium">
+                      {item.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Vincular ao checklist</div>
-            <Select
-              value={selectedChecklistItemId}
-              onValueChange={setSelectedChecklistItemId}
-              disabled={uploading}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sem vinculo</SelectItem>
-                {checklist.map((item) => (
-                  <SelectItem key={item.id} value={String(item.id)}>
-                    {item.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-slate-50 pt-4">
+            <div className="flex items-center gap-2">
+              <Badge className="rounded-full bg-primary/10 text-primary hover:bg-primary/20 px-3 border-0 font-black tracking-widest uppercase text-[10px]">
+                {documents.length} ARQUIVOS
+              </Badge>
+            </div>
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+              Espaço Utilizado: <span className="text-slate-900 ml-1">{formatBytes(totalSize)}</span>
+            </div>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <Badge variant="secondary">{documents.length} arquivo(s)</Badge>
-          <span>Total: {formatBytes(totalSize)}</span>
-        </div>
-      </div>
+        <div className="grid gap-3">
+          {documents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-slate-100 bg-slate-50/20 p-12 text-center">
+              <div className="rounded-full bg-slate-100 p-4 mb-4">
+                <FileText className="h-8 w-8 text-slate-300" />
+              </div>
+              <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">
+                Nenhum documento anexado ainda.
+              </p>
+            </div>
+          ) : (
+            documents.map((document) => (
+              <div
+                key={document.id}
+                className="group flex flex-col gap-4 rounded-[2rem] border-2 border-slate-100 bg-white p-5 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-slate-200/30 md:flex-row md:items-center"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-4">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-50 p-2 shadow-inner group-hover:bg-primary/5 transition-colors">
+                    <FileText className="h-7 w-7 text-slate-400 group-hover:text-primary transition-colors" />
+                  </div>
 
-      <div className="space-y-2">
-        {documents.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Nenhum documento anexado.
-          </div>
-        ) : (
-          documents.map((document) => (
-            <div
-              key={document.id}
-              className="flex flex-col gap-3 rounded-lg border bg-background p-3 md:flex-row md:items-center"
-            >
-              <div className="flex min-w-0 flex-1 items-start gap-3">
-                <div className="rounded-md bg-muted p-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{document.nome}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>{document.tipo || getFileExtension(document.nome).replace(".", "").toUpperCase()}</span>
-                    <span>{formatBytes(document.tamanhoBytes)}</span>
-                    <span>
-                      {new Date(document.createdAt).toLocaleDateString("pt-BR")}
-                    </span>
-                    {document.checklistItemId && (
-                      <Badge variant="outline">
-                        {checklistById.get(document.checklistItemId) ?? "Checklist"}
-                      </Badge>
-                    )}
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="truncate text-sm font-black text-slate-900 tracking-tight">{document.nome}</div>
+                    <div className="flex flex-wrap items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      <span className="bg-slate-100 px-2 py-0.5 rounded-lg text-slate-500">{document.tipo || getFileExtension(document.nome).replace(".", "").toUpperCase()}</span>
+                      <span>{formatBytes(document.tamanhoBytes)}</span>
+                      <span>{new Date(document.createdAt).toLocaleDateString("pt-BR")}</span>
+                      {document.checklistItemId && (
+                        <Badge className="bg-emerald-500 text-white border-0 text-[10px] px-3 rounded-full font-black tracking-widest">
+                          {checklistById.get(document.checklistItemId) ?? "Checklist"}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex shrink-0 gap-2">
-                {document.url && (
-                  <>
-                    <Button
-                      size="icon-sm"
-                      variant="outline"
-                      title="Visualizar"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setViewer({
-                          open: true,
-                          document,
-                          src: `/api/agendamentos/${agendamentoId}/documentos/${document.id}/view`,
-                        });
-                      }}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-
-                    <Button
-                      size="icon-sm"
-                      variant="outline"
-                      title="Download"
-                      asChild
-                    >
-                      <a
-                        href={`/api/agendamentos/${agendamentoId}/documentos/${document.id}/view`}
-                        download
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label={`Download: ${document.nome}`}
+                <div className="flex shrink-0 gap-2 border-t border-slate-50 pt-4 md:border-0 md:pt-0">
+                  {document.url && (
+                    <>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-11 w-11 rounded-2xl hover:bg-primary/5 hover:text-primary text-slate-400 transition-all"
+                        title="Visualizar"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setViewer({
+                            open: true,
+                            document,
+                            src: `/api/agendamentos/${agendamentoId}/documentos/${document.id}/view`,
+                          });
+                        }}
                       >
-                        <Download className="h-4 w-4" />
-                      </a>
-                    </Button>
+                        <Eye className="h-5 w-5" />
+                      </Button>
 
-                  </>
-                )}
-
-                <Button
-                  size="icon-sm"
-                  variant="outline"
-                  title="Excluir"
-                  onClick={() => handleDelete(document)}
-                  disabled={deletingId === document.id}
-                >
-                  {deletingId === document.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4 text-red-600" />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-11 w-11 rounded-2xl hover:bg-slate-100 text-slate-400 transition-all"
+                        title="Download"
+                        asChild
+                      >
+                        <a
+                          href={`/api/agendamentos/${agendamentoId}/documentos/${document.id}/view`}
+                          download
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Download: ${document.nome}`}
+                        >
+                          <Download className="h-5 w-5" />
+                        </a>
+                      </Button>
+                    </>
                   )}
-                </Button>
+
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-11 w-11 rounded-2xl hover:bg-red-50 hover:text-red-500 text-slate-400 transition-all"
+                    title="Excluir"
+                    onClick={() => handleDelete(document)}
+                    disabled={deletingId === document.id}
+                  >
+                    {deletingId === document.id ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-5 w-5" />
+                    )}
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))
-        )}
-      </div>
+            ))
+          )}
+        </div>
       </div>
     </>
   );
 }
-

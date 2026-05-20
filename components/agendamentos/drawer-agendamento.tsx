@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Clock,
   Edit,
+  ExternalLink,
+  History,
   Loader2,
   Trash2,
   User,
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import useSWR from "swr";
+import Link from "next/link";
 
 import { ChecklistDocumentos } from "@/components/agendamentos/checklist-documentos";
 import { LinkEnvioCliente } from "@/components/agendamentos/link-envio-cliente";
@@ -103,6 +106,19 @@ export function DrawerAgendamento({
   const [contribCpf, setContribCpf] = useState('');
   const [contribSaving, setContribSaving] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+
+  const totalDocumentsSize = useMemo(() => {
+    if (!scheduling?.documents) return 0;
+    return scheduling.documents.reduce((acc, doc) => acc + (doc.tamanhoBytes || 0), 0);
+  }, [scheduling?.documents]);
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
 
   const { data, isLoading, mutate } = useSWR(
     open && scheduling ? ["agendamento-detail", scheduling.id] : null,
@@ -298,6 +314,15 @@ export function DrawerAgendamento({
                             <span className="inline-flex items-center gap-2">
                               <User className="h-4 w-4 text-muted-foreground" />
                               {detail.nome}
+                              {detail.contribuinteId && (
+                                <Link
+                                  href={`/contribuintes/${detail.contribuinteId}`}
+                                  className="ml-1 text-primary hover:underline"
+                                  title="Ver cadastro completo"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </Link>
+                              )}
                             </span>
                           }
                         />
@@ -412,26 +437,43 @@ export function DrawerAgendamento({
 
                     <TabsContent value="historico" className="mt-0">
                       <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-4">
+                           <History className="h-4 w-4" />
+                           Linha do Tempo
+                        </div>
                         {detail.history?.length ? (
                           detail.history.map((item) => (
-                            <div key={item.id} className="rounded-lg border bg-background p-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="text-sm font-medium">{item.acao}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {new Date(item.createdAt).toLocaleString("pt-BR")}
+                            <div key={item.id} className="relative pl-6 pb-6 last:pb-0">
+                              <div className="absolute left-[7px] top-1.5 h-full w-[2px] bg-muted last:hidden" />
+                              <div className="absolute left-0 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-primary bg-background" />
+                              
+                              <div className="rounded-xl border bg-background p-3 shadow-sm">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="text-sm font-bold text-foreground">
+                                    {item.acao.replace(/_/g, ' ').toUpperCase()}
+                                  </div>
+                                  <div className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                                    {new Date(item.createdAt).toLocaleString("pt-BR")}
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="mt-1 text-sm text-muted-foreground">
-                                {item.detalhes || "Sem detalhes"}
-                              </div>
-                              <div className="mt-2 text-xs text-muted-foreground">
-                                {item.responsavel || "Cliente"}
+                                <div className="mt-1 text-sm text-muted-foreground leading-relaxed">
+                                  {item.detalhes || "Sem detalhes adicionais"}
+                                </div>
+                                <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                                  <User className="h-3 w-3" />
+                                  {item.responsavel || "Sistema / Cliente"}
+                                </div>
                               </div>
                             </div>
                           ))
                         ) : (
-                          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                            Nenhuma acao registrada.
+                          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 text-center">
+                            <div className="rounded-full bg-muted p-3 mb-3">
+                               <History className="h-6 w-6 text-muted-foreground/50" />
+                            </div>
+                            <p className="text-sm font-medium text-muted-foreground">
+                              Nenhuma ação registrada ainda.
+                            </p>
                           </div>
                         )}
                       </div>

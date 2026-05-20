@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -14,6 +14,9 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
+
+  const isFocusMode = pathname?.includes("/contribuintes/") && /\/contribuintes\/\d+/.test(pathname)
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -34,9 +37,9 @@ export default function DashboardLayout({
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset className="bg-muted/30">
+    <SidebarProvider defaultOpen={!isFocusMode}>
+      {!isFocusMode && <AppSidebar />}
+      <SidebarInset className={isFocusMode ? "bg-background" : "bg-muted/30"}>
         {children}
       </SidebarInset>
     </SidebarProvider>

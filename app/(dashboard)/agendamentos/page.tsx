@@ -87,16 +87,27 @@ function ProgressIndicator({ scheduling }: { scheduling: Scheduling }) {
     total: 12,
     percentage: 0,
   };
-  const tone = getProgressTone(progress.percentage);
+  
+  // Cores semânticas conforme requisito:
+  // Vermelho: < 40%
+  // Amarelo: 40% - 79%
+  // Verde: >= 80%
+  const colors = 
+    progress.percentage < 40 
+      ? { text: "text-red-600", bar: "bg-red-500" }
+      : progress.percentage < 80
+        ? { text: "text-amber-600", bar: "bg-amber-500" }
+        : { text: "text-emerald-600", bar: "bg-emerald-500" };
 
   return (
-    <div className="mt-1 w-full space-y-1">
-      <div className={`text-[11px] font-medium ${tone.textClass}`}>
-        {progress.received} / {progress.total} documentos
+    <div className="mt-1.5 w-full space-y-1">
+      <div className={`flex justify-between items-center text-[10px] font-bold ${colors.text}`}>
+        <span>{progress.received} / {progress.total} documentos</span>
+        <span>{progress.percentage}%</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-black/10">
+      <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 shadow-inner">
         <div
-          className={`h-full ${tone.barClass} transition-all`}
+          className={`h-full ${colors.bar} transition-all duration-500 ease-out`}
           style={{ width: `${progress.percentage}%` }}
         />
       </div>
@@ -139,9 +150,24 @@ export default function AgendamentosPage() {
 
   const { data, mutate, isLoading } = useSWR(
     ["agendamentos", statusFilter],
-    () => schedulingService.list(statusFilter),
+    () => schedulingService.list({ status: statusFilter === "all" ? undefined : statusFilter }),
     { revalidateOnFocus: false }
   );
+
+  // Abrir agendamento se vier ID na URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const id = searchParams.get("id");
+    if (id && data?.agendamentos) {
+      const found = data.agendamentos.find((s) => s.id === Number(id));
+      if (found) {
+        setSelectedScheduling(found);
+        // Limpar a URL para não reabrir ao atualizar
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }
+    }
+  }, [data?.agendamentos]);
 
   const { data: contributorsData } = useSWR(
     ["contribuintes-agendamento", debouncedSearch],
@@ -510,14 +536,14 @@ async function deleteScheduling(id: number) {
                               event.stopPropagation();
                               setSelectedScheduling(scheduling);
                             }}
-                            className={`min-h-[64px] w-full rounded-md border border-transparent px-2 py-1.5 text-left text-xs transition hover:border-primary hover:bg-primary/10 focus-visible:border-primary focus-visible:bg-primary/10 ${
+                            className={`group relative min-h-[72px] w-full rounded-xl border border-slate-200/60 p-2.5 text-left text-xs transition-all hover:border-primary/50 hover:bg-white hover:shadow-md focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 ${
                               scheduling.status === "confirmado"
-                                ? "bg-emerald-100 text-emerald-800"
+                                ? "bg-emerald-50/50"
                                 : scheduling.status === "agendado"
-                                  ? "bg-amber-100 text-amber-800"
+                                  ? "bg-amber-50/50"
                                   : scheduling.status === "concluido"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-red-100 text-red-800"
+                                    ? "bg-blue-50/50"
+                                    : "bg-red-50/50"
                             }`}
                             type="button"
                           >

@@ -19,16 +19,16 @@ const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads', 'agendamentos'
 const FILE_NAME_MATCHES: Record<string, string[]> = {
   'rg-cnh': ['rg', 'cnh', 'identidade'],
   cpf: ['cpf'],
-  'comprovante-residencia': ['residencia', 'endereco', 'agua', 'luz', 'telefone'],
+  'comprovante-residencia': ['residencia', 'residência', 'endereco', 'endereço', 'agua', 'luz', 'telefone'],
   'informe-rendimentos-empregador': ['empregador', 'rendimentos', 'holerite'],
-  'informe-rendimentos-bancarios': ['bancario', 'banco', 'aplicacao', 'conta'],
-  'extrato-previdencia-privada': ['previdencia', 'pgbl', 'vgbl'],
-  'recibos-medicos-odontologicos': ['medico', 'odontologico', 'saude', 'dentista'],
-  'despesas-educacao': ['educacao', 'escola', 'faculdade', 'curso'],
-  'comprovante-doacoes': ['doacao', 'doacoes'],
-  'carne-leao': ['carne', 'leao', 'autonomo'],
+  'informe-rendimentos-bancarios': ['bancario', 'bancário', 'banco', 'aplicacao', 'aplicação', 'conta'],
+  'extrato-previdencia-privada': ['previdencia', 'previdência', 'pgbl', 'vgbl'],
+  'recibos-medicos-odontologicos': ['medico', 'médico', 'odontologico', 'odontológico', 'saude', 'saúde', 'dentista'],
+  'despesas-educacao': ['educacao', 'educação', 'escola', 'faculdade', 'curso'],
+  'comprovante-doacoes': ['doacao', 'doação', 'doacoes', 'doações'],
+  'carne-leao': ['carne', 'carnê', 'leao', 'leão', 'autonomo', 'autônomo'],
   'darf-pago': ['darf'],
-  'declaracao-ano-anterior': ['declaracao', 'anterior', 'recibo'],
+  'declaracao-ano-anterior': ['declaracao', 'declaração', 'anterior', 'recibo'],
 };
 
 function normalizeForMatch(value: string) {
@@ -116,18 +116,20 @@ export async function ensureSchedulingChecklist(
           documentMatchesChecklist(doc.nomeArquivo, item.chave)
       );
 
+      const status = copiedStatusByKey.get(item.chave) ??
+          (copiedDocumentKeys.has(item.chave) || hasMatchingDocument
+            ? 'recebido'
+            : 'pendente');
+
       return {
         agendamentoId,
         chave: item.chave,
         nome: item.nome,
-        status:
-          copiedStatusByKey.get(item.chave) ??
-          (copiedDocumentKeys.has(item.chave) || hasMatchingDocument
-            ? 'recebido'
-            : 'pendente'),
+        status,
         ordem: index,
       };
     }),
+    skipDuplicates: true,
   });
 
   return db.checklistAgendamento.findMany({

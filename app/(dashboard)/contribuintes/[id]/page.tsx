@@ -127,73 +127,53 @@ export default function ContribuintePage() {
 
   return (
     <>
-      <AppHeader
-        title="Detalhes do Contribuinte"
-        description="Informações completas da declaração IRPF"
-      />
-
-      <main className="flex-1 overflow-auto bg-muted/20 p-6">
-        <div className="mx-auto max-w-7xl space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button
-              variant="outline"
-              onClick={() => router.push("/contribuintes")}
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Voltar
-            </Button>
-
-            <Button
-              variant="secondary"
-              disabled={refreshing || loading}
-              onClick={() => loadData(true)}
-            >
-              <RefreshCcw
-                className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              />
-              Atualizar
-            </Button>
-          </div>
-
-          <Card className="border-none shadow-sm">
-            <CardContent className="p-6">
-              {loading ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-40 w-full" />
-                  <Skeleton className="h-40 w-full" />
+      <main className="flex-1 overflow-auto bg-background">
+        <div className="w-full">
+          {loading ? (
+            <div className="p-8 space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-40 w-full" />
+              <Skeleton className="h-40 w-full" />
+            </div>
+          ) : error ? (
+            <div className="p-8">
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold text-red-600">
+                    Erro ao carregar contribuinte
+                  </h3>
+                  <p className="text-sm text-red-500">{error}</p>
+                  <Button
+                    className="mt-4"
+                    onClick={() => loadData()}
+                  >
+                    Tentar novamente
+                  </Button>
                 </div>
-              ) : error ? (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-red-600">
-                      Erro ao carregar contribuinte
-                    </h3>
-                    <p className="text-sm text-red-500">{error}</p>
-                    <Button
-                      className="mt-4"
-                      onClick={() => loadData()}
-                    >
-                      Tentar novamente
-                    </Button>
-                  </div>
-                </div>
-              ) : contribuinte ? (
-                <ContribuinteDetails
-                  contribuinte={contribuinte}
-                  declaration={declaration}
-                  assets={assets}
-                  onDataRefresh={() => loadData(true)}
-                />
-              ) : (
-                <div className="rounded-2xl border border-dashed p-8 text-center">
-                  <p className="text-muted-foreground">
-                    Contribuinte não encontrado.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            </div>
+          ) : contribuinte ? (
+            <ContribuinteDetails
+              contribuinte={contribuinte}
+              declaration={declaration}
+              assets={assets}
+              onDataRefresh={() => loadData(true)}
+            />
+          ) : (
+            <div className="p-20 text-center">
+              <p className="text-muted-foreground text-lg">
+                Contribuinte não encontrado.
+              </p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => router.push("/contribuintes")}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar para lista
+              </Button>
+            </div>
+          )}
         </div>
       </main>
     </>

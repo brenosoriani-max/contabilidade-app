@@ -20,9 +20,16 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
+    const contribuinteId = searchParams.get('contribuinteId');
+    const cpf = searchParams.get('cpf');
+
+    const where: any = {};
+    if (status && status !== 'all') where.status = status;
+    if (contribuinteId) where.contribuinteId = Number(contribuinteId);
+    if (cpf) where.contribuinte = { cpf };
 
     const agendamentos = await prisma.agendamento.findMany({
-      where: status && status !== 'all' ? { status: status as any } : {},
+      where,
       include: {
         contribuinte: true,
         usuario: true,
@@ -30,7 +37,7 @@ export async function GET(request: NextRequest) {
         documentos: true,
         envioLink: true,
       },
-      orderBy: [{ dataAgendamento: 'asc' }, { horaInicio: 'asc' }],
+      orderBy: [{ dataAgendamento: 'desc' }, { horaInicio: 'desc' }],
     });
 
     return ok({ agendamentos: agendamentos.map(mapScheduling) });

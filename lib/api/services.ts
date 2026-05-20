@@ -71,9 +71,9 @@ export const userService = {
 };
 
 export const schedulingService = {
-  list: (status?: string) =>
+  list: (params?: { status?: string; contribuinteId?: number; cpf?: string }) =>
     unwrap<{ agendamentos: Scheduling[] }>(
-      api.get('/agendamentos', { params: { status } })
+      api.get('/agendamentos', { params })
     ),
   get: (id: number) =>
     unwrap<{ agendamento: Scheduling }>(api.get(`/agendamentos/${id}`)),
