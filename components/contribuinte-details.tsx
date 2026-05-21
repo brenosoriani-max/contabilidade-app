@@ -73,11 +73,7 @@ import {
   getStatusLabel,
 } from "@/lib/format"
 
-<<<<<<< HEAD
-import { declaracaoIrpfService, schedulingService, importService } from "@/lib/api/services"
-=======
-import { declaracaoIrpfService, schedulingService, contribuinteService } from "@/lib/api/services"
->>>>>>> 7a39e0a3ffab19724216e33286b8f69b8e2b9dd2
+import { declaracaoIrpfService, schedulingService, importService, contribuinteService } from "@/lib/api/services"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -1168,7 +1164,12 @@ export const ContribuinteDetails = React.memo(
             >
               Checklist IR
             </TabsTrigger>
-           
+            <TabsTrigger
+              value="documentos"
+              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
+            >
+              Documentos
+            </TabsTrigger>
             <TabsTrigger
               value="bens"
               className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
@@ -1447,7 +1448,6 @@ export const ContribuinteDetails = React.memo(
             </div>
           </TabsContent>
 
-<<<<<<< HEAD
           {/* TAB: DOCUMENTOS */}
           <TabsContent value="documentos">
             <div className="grid gap-6 md:grid-cols-2">
@@ -1645,9 +1645,6 @@ export const ContribuinteDetails = React.memo(
               </Card>
             </div>
           </TabsContent>
-=======
-       
->>>>>>> 7a39e0a3ffab19724216e33286b8f69b8e2b9dd2
 
           {/* TAB: BENS */}
           <TabsContent value="bens">
