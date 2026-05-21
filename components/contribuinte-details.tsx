@@ -73,7 +73,11 @@ import {
   getStatusLabel,
 } from "@/lib/format"
 
+<<<<<<< HEAD
 import { declaracaoIrpfService, schedulingService, importService } from "@/lib/api/services"
+=======
+import { declaracaoIrpfService, schedulingService, contribuinteService } from "@/lib/api/services"
+>>>>>>> 7a39e0a3ffab19724216e33286b8f69b8e2b9dd2
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -165,13 +169,7 @@ const PIPELINE_ORDER = [
   "entregue",
 ]
 
-const PIPELINE_STEPS = [
-  { label: "XML importado" },
-  { label: "Coletando docs" },
-  { label: "Revisão" },
-  { label: "Pronto p/ envio" },
-  { label: "Entregue" },
-]
+
 
 type StepStatus = "done" | "active" | "pending"
 
@@ -232,13 +230,19 @@ function Field({
     }
   }, [value, isEditing])
 
+  const hasSavedForCurrentValueRef = React.useRef<string | null>(null)
+
   const handleBlur = () => {
     setIsEditing(false)
     const normalized = tempValue.trim()
     const original = (value ?? "").toString().trim()
-    if (normalized !== original) {
-      onSave?.(normalized)
-    }
+
+    // Evita dupla submissão (Enter + blur no re-render)
+    if (normalized === original) return
+    if (hasSavedForCurrentValueRef.current === normalized) return
+
+    hasSavedForCurrentValueRef.current = normalized
+    onSave?.(normalized)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -246,21 +250,28 @@ function Field({
       handleBlur()
     }
     if (e.key === "Escape") {
+      hasSavedForCurrentValueRef.current = null
       setTempValue((value ?? "").toString())
       setIsEditing(false)
     }
   }
 
+  // Estilo: editável com fundo cinza claro, badge EDITAR à direita
+  const isEditable = editable && onSave
+  const hasValue = value != null && value !== ""
+
   return (
     <div
       className={cn(
-        "p-3 rounded-xl transition-all duration-500 border",
+        "px-4 py-3 rounded-xl transition-all duration-300",
         highlighted
-          ? "bg-primary/5 border-primary ring-2 ring-primary/20 scale-[1.02]"
-          : "border-transparent",
-        editable ? "hover:bg-muted/50 cursor-text" : "hover:bg-muted/30"
+          ? "bg-primary/5 ring-2 ring-primary/20 scale-[1.01]"
+          : isEditable
+            ? "bg-muted/40 hover:bg-muted/60"
+            : "",
+        isEditable ? "cursor-text" : ""
       )}
-      onClick={() => editable && !isEditing && setIsEditing(true)}
+      onClick={() => isEditable && !isEditing && setIsEditing(true)}
     >
       <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">
         {label}
@@ -268,33 +279,32 @@ function Field({
       {isEditing ? (
         <Input
           autoFocus
-          className="h-7 text-sm font-bold bg-background border-primary"
+          className="h-8 text-sm font-bold bg-background border-primary/40 focus-visible:ring-primary/30"
           value={tempValue}
           onChange={(e) => setTempValue(e.target.value)}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
         />
       ) : (
-        <p className="font-bold text-sm tracking-tight flex items-center justify-between">
-          {value ? (
-            value
-          ) : (
-            <span className="text-muted-foreground/40 italic font-normal">
-              Não informado
+        <div className="flex items-center justify-between min-h-[28px]">
+          <p className={cn(
+            "text-sm tracking-tight",
+            hasValue ? "font-bold text-foreground" : "font-normal text-muted-foreground/40 italic"
+          )}>
+            {hasValue ? value : "Não informado"}
+          </p>
+          {isEditable && (
+            <span className="text-[9px] text-primary font-black uppercase tracking-wider opacity-70 hover:opacity-100 transition-opacity ml-2 shrink-0">
+              Editar
             </span>
           )}
-          {editable && !value && (
-            <span className="text-[8px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-black">
-              EDITAR
-            </span>
-          )}
-        </p>
+        </div>
       )}
     </div>
   )
 }
 
-/* ───────────────────────────── */
+
 
 export const ContribuinteDetails = React.memo(
   ({ declaration, contribuinte, assets = [], onDataRefresh }: Props) => {
@@ -391,7 +401,10 @@ export const ContribuinteDetails = React.memo(
     }
 
     const handleSaveBem = async () => {
-      if (!declaracaoId) return
+      if (!declaracaoId) {
+        toast.error("Nenhuma declaração vinculada a este contribuinte. Importe um XML primeiro para poder cadastrar bens.")
+        return
+      }
       setSavingBem(true)
       try {
         const url = editingBem 
@@ -404,7 +417,10 @@ export const ContribuinteDetails = React.memo(
           body: JSON.stringify(bemForm),
         })
 
-        if (!res.ok) throw new Error("Erro ao salvar patrimônio")
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData?.message || errData?.erro || "Erro ao salvar patrimônio")
+        }
         
         toast.success(editingBem ? "Bem atualizado!" : "Novo bem cadastrado!")
         setIsBemDialogOpen(false)
@@ -417,7 +433,11 @@ export const ContribuinteDetails = React.memo(
     }
 
     const handleDeleteBem = async (bid: number) => {
-      if (!declaracaoId || !confirm("Deseja realmente excluir este bem?")) return
+      if (!declaracaoId) {
+        toast.error("Nenhuma declaração vinculada a este contribuinte.")
+        return
+      }
+      if (!confirm("Deseja realmente excluir este bem?")) return
       setDeletingBemId(bid)
       try {
         const res = await fetch(`/api/declaracoes/${declaracaoId}/bens/${bid}`, {
@@ -788,23 +808,70 @@ export const ContribuinteDetails = React.memo(
       void loadHistory()
     }, [activeTab, cpf])
 
+    // Mapeamento de fieldPath para coluna do Contribuinte (usada no fallback)
+    const FIELD_TO_CONTRIBUINTE_COLUMN: Record<string, string> = {
+      'identificacao.nome_completo': 'nome',
+      'identificacao.cpf': 'cpf',
+      'identificacao.data_nascimento': 'dataNascimento',
+      'identificacao.titulo_eleitor': 'tituloEleitor',
+      'identificacao.ocupacao_principal': 'ocupacaoPrincipal',
+      'identificacao.natureza_ocupacao': 'naturezaOcupacao',
+      'endereco.cep': 'enderecoCep',
+      'endereco.uf': 'enderecoUf',
+      'endereco.codigo_municipio_ibge': 'enderecoMunicipio',
+      'endereco.bairro': 'enderecoBairro',
+      'endereco.logradouro': 'enderecoLogradouro',
+      'endereco.numero': 'enderecoNumero',
+      'endereco.complemento': 'enderecoComplemento',
+      'contato.email': 'email',
+      'contato.celular': 'telefone',
+    }
+
+    const fieldUpdateSeqRef = React.useRef(0)
+
     async function handleFieldUpdate(fieldPath: string, value: string) {
-      if (!declaracaoId) {
-        toast.error("ID da declaração não encontrado")
-        return
-      }
+      const seq = ++fieldUpdateSeqRef.current
+      console.log('[handleFieldUpdate] START', { seq, fieldPath, value })
+      // garante que o console apareça mesmo se filtros estiverem ativos
+      void 0
       setSavingField(fieldPath)
       try {
-        await declaracaoIrpfService.putCampo(declaracaoId, {
-          campo: fieldPath,
-          valor: value,
-        })
-        toast.success("Campo atualizado", {
-          description:
-            "A alteração foi salva e sincronizada com o XML de exportação.",
-        })
-        onDataRefresh?.()
-        carregarChecklist()
+        // Se há declaração vinculada, usa o endpoint de campo (modelo canônico + sync DB)
+        if (declaracaoId) {
+          await declaracaoIrpfService.putCampo(declaracaoId, {
+            campo: fieldPath,
+            valor: value,
+          })
+          toast.success("Campo atualizado", {
+            description:
+              "A alteração foi salva e sincronizada com o XML de exportação.",
+          })
+        } else if (contribuinteId) {
+          // Fallback: atualiza diretamente o Contribuinte no banco
+          const dbColumn = FIELD_TO_CONTRIBUINTE_COLUMN[fieldPath]
+          if (!dbColumn) {
+            toast.error(`Campo '${fieldPath}' não pode ser editado sem uma declaração.`)
+            return
+          }
+          // Monta payload com todos os dados existentes + campo editado
+          const payload: Record<string, unknown> = {
+            nome: contribuinte?.nome || "",
+            [dbColumn]: value,
+          }
+          await contribuinteService.update(contribuinteId, payload)
+          toast.success("Campo atualizado", {
+            description: "O dado foi salvo diretamente no cadastro do contribuinte.",
+          })
+        } else {
+          toast.error("Não foi possível identificar o contribuinte para atualização.")
+          return
+        }
+
+        // Evita que um refresh atrasado “apague” o que foi salvo no update mais recente
+        if (seq === fieldUpdateSeqRef.current) {
+          onDataRefresh?.()
+          if (declaracaoId) carregarChecklist()
+        }
       } catch (e: any) {
         const msg =
           e?.response?.data?.message ||
@@ -815,7 +882,7 @@ export const ContribuinteDetails = React.memo(
         toast.error(msg)
         console.error("[handleFieldUpdate] erro:", e?.response ?? e)
       } finally {
-        setSavingField(null)
+        if (seq === fieldUpdateSeqRef.current) setSavingField(null)
       }
     }
 
@@ -879,28 +946,7 @@ export const ContribuinteDetails = React.memo(
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-             <Button
-                variant="secondary"
-                size="sm"
-                className="h-9 rounded-xl font-black text-[10px] uppercase tracking-widest"
-                onClick={() => onDataRefresh?.()}
-              >
-                <RefreshCcw className="mr-2 h-3.5 w-3.5" />
-                Sincronizar
-              </Button>
-              
-              <div className="h-6 w-px bg-black/10 mx-2" />
-              
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-10 w-10 rounded-full border-black/10 relative"
-              >
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-primary" />
-              </Button>
-          </div>
+          
         </div>
 
         <div className="px-8 pb-12 space-y-6">
@@ -986,56 +1032,10 @@ export const ContribuinteDetails = React.memo(
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-9 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
-                  >
-                    REENVIAR LINK
-                  </Button>
                 </div>
               </div>
             </CardHeader>
           </Card>
-
-          {/* PIPELINE */}
-          <div className="w-full px-2">
-            <div className="flex flex-wrap items-center justify-center gap-4 py-3">
-              {(() => {
-                const statusPipeline =
-                  checklist?.status_pipeline ||
-                  declaration?.statusPipeline ||
-                  "pendente"
-                const currentIndex = PIPELINE_ORDER.indexOf(statusPipeline)
-                const activeIndex = currentIndex === -1 ? 0 : currentIndex
-
-                return PIPELINE_STEPS.map((step, idx) => {
-                  let status: StepStatus = "pending"
-                  if (idx < activeIndex) status = "done"
-                  else if (idx === activeIndex) status = "active"
-
-                  const isLast = idx === PIPELINE_STEPS.length - 1
-
-                  return (
-                    <Fragment key={idx}>
-                      <span
-                        className={cn(
-                          "text-[12px] font-black uppercase tracking-[0.25em] text-black",
-                          status === "pending" && "opacity-60"
-                        )}
-                      >
-                        {step.label}
-                      </span>
-                      {!isLast && (
-                        <span className="text-[12px] text-black/40 px-2">→</span>
-                      )}
-                    </Fragment>
-                  )
-                })
-              })()}
-            </div>
-          </div>
         </div>
 
         {/* KPI CARDS / EMPTY BANNER */}
@@ -1168,12 +1168,7 @@ export const ContribuinteDetails = React.memo(
             >
               Checklist IR
             </TabsTrigger>
-            <TabsTrigger
-              value="documentos"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
-            >
-              Documentos
-            </TabsTrigger>
+           
             <TabsTrigger
               value="bens"
               className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
@@ -1188,7 +1183,7 @@ export const ContribuinteDetails = React.memo(
             </TabsTrigger>
           </TabsList>
 
-          {/* TAB: DADOS */}
+      
           <TabsContent value="dados">
             <div className="grid gap-6 md:grid-cols-2">
               <Card className="border-none shadow-sm">
@@ -1306,94 +1301,10 @@ export const ContribuinteDetails = React.memo(
             </div>
           </TabsContent>
 
-          {/* TAB: CHECKLIST */}
+
           <TabsContent value="checklist">
-            <div className="grid gap-6 lg:grid-cols-3">
-              <Card className="lg:col-span-1 border-none shadow-sm bg-gradient-to-br from-primary/10 to-transparent h-fit sticky top-6">
-                <CardHeader className="pb-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">
-                    Qualidade dos Dados
-                  </p>
-                  <CardTitle className="text-2xl font-black">
-                    Progresso Geral
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <div className="relative h-32 w-32 flex items-center justify-center">
-                      <svg className="h-full w-full rotate-[-90deg]">
-                        <circle
-                          cx="64"
-                          cy="64"
-                          r="58"
-                          fill="transparent"
-                          stroke="currentColor"
-                          strokeWidth="12"
-                          className="text-muted/20"
-                        />
-                        <circle
-                          cx="64"
-                          cy="64"
-                          r="58"
-                          fill="transparent"
-                          stroke="currentColor"
-                          strokeWidth="12"
-                          strokeDasharray={364.4}
-                          strokeDashoffset={
-                            364.4 -
-                            364.4 * (concluidos.length / cadastroItems.length)
-                          }
-                          className="text-primary transition-all duration-1000"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl font-black">
-                          {Math.round(
-                            (concluidos.length / cadastroItems.length) * 100
-                          )}
-                          %
-                        </span>
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground">
-                          Auditado
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-muted-foreground">
-                        Obrigatórios
-                      </span>
-                      <span className="font-black text-primary">
-                        {concluidos.length} de {cadastroItems.length}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all duration-1000"
-                        style={{
-                          width: `${(concluidos.length / cadastroItems.length) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    className="w-full h-12 rounded-xl font-bold shadow-lg shadow-primary/20"
-                    onClick={carregarChecklist}
-                    disabled={checklistLoading}
-                  >
-                    {checklistLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <ClipboardCheck className="h-4 w-4 mr-2" />
-                    )}
-                    Sincronizar Conferência
-                  </Button>
-                </CardContent>
-              </Card>
+            <div className="grid gap-6 lg:grid-cols-5">
+           
 
               <div className="lg:col-span-2 space-y-8">
                 {["Dados Pessoais", "Documentos", "Financeiro", "Patrimônio"].map(
@@ -1536,6 +1447,7 @@ export const ContribuinteDetails = React.memo(
             </div>
           </TabsContent>
 
+<<<<<<< HEAD
           {/* TAB: DOCUMENTOS */}
           <TabsContent value="documentos">
             <div className="grid gap-6 md:grid-cols-2">
@@ -1733,6 +1645,9 @@ export const ContribuinteDetails = React.memo(
               </Card>
             </div>
           </TabsContent>
+=======
+       
+>>>>>>> 7a39e0a3ffab19724216e33286b8f69b8e2b9dd2
 
           {/* TAB: BENS */}
           <TabsContent value="bens">
