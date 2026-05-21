@@ -225,13 +225,19 @@ function Field({
     }
   }, [value, isEditing])
 
+  const hasSavedForCurrentValueRef = React.useRef<string | null>(null)
+
   const handleBlur = () => {
     setIsEditing(false)
     const normalized = tempValue.trim()
     const original = (value ?? "").toString().trim()
-    if (normalized !== original) {
-      onSave?.(normalized)
-    }
+
+    // Evita dupla submissão (Enter + blur no re-render)
+    if (normalized === original) return
+    if (hasSavedForCurrentValueRef.current === normalized) return
+
+    hasSavedForCurrentValueRef.current = normalized
+    onSave?.(normalized)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -239,6 +245,7 @@ function Field({
       handleBlur()
     }
     if (e.key === "Escape") {
+      hasSavedForCurrentValueRef.current = null
       setTempValue((value ?? "").toString())
       setIsEditing(false)
     }
@@ -292,7 +299,7 @@ function Field({
   )
 }
 
-/* ───────────────────────────── */
+
 
 export const ContribuinteDetails = React.memo(
   ({ declaration, contribuinte, assets = [], onDataRefresh }: Props) => {
@@ -738,7 +745,13 @@ export const ContribuinteDetails = React.memo(
       'contato.celular': 'telefone',
     }
 
+    const fieldUpdateSeqRef = React.useRef(0)
+
     async function handleFieldUpdate(fieldPath: string, value: string) {
+      const seq = ++fieldUpdateSeqRef.current
+      console.log('[handleFieldUpdate] START', { seq, fieldPath, value })
+      // garante que o console apareça mesmo se filtros estiverem ativos
+      void 0
       setSavingField(fieldPath)
       try {
         // Se há declaração vinculada, usa o endpoint de campo (modelo canônico + sync DB)
@@ -771,8 +784,12 @@ export const ContribuinteDetails = React.memo(
           toast.error("Não foi possível identificar o contribuinte para atualização.")
           return
         }
-        onDataRefresh?.()
-        if (declaracaoId) carregarChecklist()
+
+        // Evita que um refresh atrasado “apague” o que foi salvo no update mais recente
+        if (seq === fieldUpdateSeqRef.current) {
+          onDataRefresh?.()
+          if (declaracaoId) carregarChecklist()
+        }
       } catch (e: any) {
         const msg =
           e?.response?.data?.message ||
@@ -783,7 +800,7 @@ export const ContribuinteDetails = React.memo(
         toast.error(msg)
         console.error("[handleFieldUpdate] erro:", e?.response ?? e)
       } finally {
-        setSavingField(null)
+        if (seq === fieldUpdateSeqRef.current) setSavingField(null)
       }
     }
 
@@ -1125,7 +1142,7 @@ export const ContribuinteDetails = React.memo(
 
 
           <TabsContent value="checklist">
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-6 lg:grid-cols-5">
            
 
               <div className="lg:col-span-2 space-y-8">
