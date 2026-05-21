@@ -164,13 +164,7 @@ const PIPELINE_ORDER = [
   "entregue",
 ]
 
-const PIPELINE_STEPS = [
-  { label: "XML importado" },
-  { label: "Coletando docs" },
-  { label: "Revisão" },
-  { label: "Pronto p/ envio" },
-  { label: "Entregue" },
-]
+
 
 type StepStatus = "done" | "active" | "pending"
 
@@ -853,28 +847,7 @@ export const ContribuinteDetails = React.memo(
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-             <Button
-                variant="secondary"
-                size="sm"
-                className="h-9 rounded-xl font-black text-[10px] uppercase tracking-widest"
-                onClick={() => onDataRefresh?.()}
-              >
-                <RefreshCcw className="mr-2 h-3.5 w-3.5" />
-                Sincronizar
-              </Button>
-              
-              <div className="h-6 w-px bg-black/10 mx-2" />
-              
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-10 w-10 rounded-full border-black/10 relative"
-              >
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-primary" />
-              </Button>
-          </div>
+          
         </div>
 
         <div className="px-8 pb-12 space-y-6">
@@ -960,56 +933,10 @@ export const ContribuinteDetails = React.memo(
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-9 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
-                  >
-                    REENVIAR LINK
-                  </Button>
                 </div>
               </div>
             </CardHeader>
           </Card>
-
-          {/* PIPELINE */}
-          <div className="w-full px-2">
-            <div className="flex flex-wrap items-center justify-center gap-4 py-3">
-              {(() => {
-                const statusPipeline =
-                  checklist?.status_pipeline ||
-                  declaration?.statusPipeline ||
-                  "pendente"
-                const currentIndex = PIPELINE_ORDER.indexOf(statusPipeline)
-                const activeIndex = currentIndex === -1 ? 0 : currentIndex
-
-                return PIPELINE_STEPS.map((step, idx) => {
-                  let status: StepStatus = "pending"
-                  if (idx < activeIndex) status = "done"
-                  else if (idx === activeIndex) status = "active"
-
-                  const isLast = idx === PIPELINE_STEPS.length - 1
-
-                  return (
-                    <Fragment key={idx}>
-                      <span
-                        className={cn(
-                          "text-[12px] font-black uppercase tracking-[0.25em] text-black",
-                          status === "pending" && "opacity-60"
-                        )}
-                      >
-                        {step.label}
-                      </span>
-                      {!isLast && (
-                        <span className="text-[12px] text-black/40 px-2">→</span>
-                      )}
-                    </Fragment>
-                  )
-                })
-              })()}
-            </div>
-          </div>
         </div>
 
         {/* KPI CARDS */}
@@ -1063,12 +990,7 @@ export const ContribuinteDetails = React.memo(
             >
               Checklist IR
             </TabsTrigger>
-            <TabsTrigger
-              value="documentos"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
-            >
-              Documentos
-            </TabsTrigger>
+           
             <TabsTrigger
               value="bens"
               className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
@@ -1083,7 +1005,7 @@ export const ContribuinteDetails = React.memo(
             </TabsTrigger>
           </TabsList>
 
-          {/* TAB: DADOS */}
+      
           <TabsContent value="dados">
             <div className="grid gap-6 md:grid-cols-2">
               <Card className="border-none shadow-sm">
@@ -1201,94 +1123,10 @@ export const ContribuinteDetails = React.memo(
             </div>
           </TabsContent>
 
-          {/* TAB: CHECKLIST */}
+
           <TabsContent value="checklist">
             <div className="grid gap-6 lg:grid-cols-3">
-              <Card className="lg:col-span-1 border-none shadow-sm bg-gradient-to-br from-primary/10 to-transparent h-fit sticky top-6">
-                <CardHeader className="pb-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">
-                    Qualidade dos Dados
-                  </p>
-                  <CardTitle className="text-2xl font-black">
-                    Progresso Geral
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <div className="relative h-32 w-32 flex items-center justify-center">
-                      <svg className="h-full w-full rotate-[-90deg]">
-                        <circle
-                          cx="64"
-                          cy="64"
-                          r="58"
-                          fill="transparent"
-                          stroke="currentColor"
-                          strokeWidth="12"
-                          className="text-muted/20"
-                        />
-                        <circle
-                          cx="64"
-                          cy="64"
-                          r="58"
-                          fill="transparent"
-                          stroke="currentColor"
-                          strokeWidth="12"
-                          strokeDasharray={364.4}
-                          strokeDashoffset={
-                            364.4 -
-                            364.4 * (concluidos.length / cadastroItems.length)
-                          }
-                          className="text-primary transition-all duration-1000"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl font-black">
-                          {Math.round(
-                            (concluidos.length / cadastroItems.length) * 100
-                          )}
-                          %
-                        </span>
-                        <span className="text-[10px] uppercase font-bold text-muted-foreground">
-                          Auditado
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-muted-foreground">
-                        Obrigatórios
-                      </span>
-                      <span className="font-black text-primary">
-                        {concluidos.length} de {cadastroItems.length}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all duration-1000"
-                        style={{
-                          width: `${(concluidos.length / cadastroItems.length) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    className="w-full h-12 rounded-xl font-bold shadow-lg shadow-primary/20"
-                    onClick={carregarChecklist}
-                    disabled={checklistLoading}
-                  >
-                    {checklistLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <ClipboardCheck className="h-4 w-4 mr-2" />
-                    )}
-                    Sincronizar Conferência
-                  </Button>
-                </CardContent>
-              </Card>
+           
 
               <div className="lg:col-span-2 space-y-8">
                 {["Dados Pessoais", "Documentos", "Financeiro", "Patrimônio"].map(
@@ -1405,203 +1243,7 @@ export const ContribuinteDetails = React.memo(
             </div>
           </TabsContent>
 
-          {/* TAB: DOCUMENTOS */}
-          <TabsContent value="documentos">
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="border-none shadow-sm h-full flex flex-col">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <FileUp className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg font-bold">
-                      Fontes Externas
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4 flex-1 flex flex-col justify-center">
-                  <div className="p-8 rounded-2xl border-2 border-dashed border-primary/20 bg-primary/5 group cursor-pointer hover:bg-primary/10 transition-all text-center">
-                    <input
-                      type="file"
-                      accept=".xml"
-                      className="hidden"
-                      id="xml-upload-main"
-                      onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)}
-                    />
-                    <Label htmlFor="xml-upload-main" className="cursor-pointer block">
-                      <FileUp className="h-10 w-10 text-primary mx-auto mb-3 opacity-50 group-hover:opacity-100 group-hover:scale-110 transition-all" />
-                      <p className="text-sm font-black text-foreground">
-                        Importar Declaração Anterior (XML)
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-2 max-w-xs mx-auto">
-                        Sincroniza automaticamente bens, dívidas e dados cadastrais
-                        da receita federal.
-                      </p>
-                    </Label>
-                  </div>
-                  <Button
-                    className="w-full h-12 rounded-xl font-bold transition-all"
-                    variant={xmlFile ? "default" : "outline"}
-                    onClick={handleImportarXml}
-                    disabled={importando || !xmlFile}
-                  >
-                    {importando ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Package className="h-4 w-4 mr-2" />
-                    )}
-                    {xmlFile ? `IMPORTAR "${xmlFile.name}"` : "SELECIONE UM ARQUIVO XML"}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="border-none shadow-sm h-full flex flex-col">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Upload className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg font-bold">
-                      Repositório de Documentos
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
-                      Tipo de Documento
-                    </Label>
-                    <Select value={tag} onValueChange={setTag}>
-                      <SelectTrigger className="h-12 rounded-xl focus:ring-primary bg-muted/20 border-none">
-                        <SelectValue placeholder="Selecione a categoria..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TAGS.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {tag === "Outros" && (
-                    <Input
-                      placeholder="Especifique o nome do documento..."
-                      className="h-12 rounded-xl border-primary/20 focus:ring-primary shadow-sm animate-in fade-in slide-in-from-top-2"
-                      value={customTag}
-                      onChange={(e) => setCustomTag(e.target.value)}
-                    />
-                  )}
-
-                  <div className="relative group space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
-                      Arquivo
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        className="h-12 pt-3 rounded-xl border-dashed border-2 opacity-0 absolute inset-0 z-10 cursor-pointer"
-                        onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                      />
-                      <div className="h-12 rounded-xl border-2 border-dashed flex items-center justify-center bg-muted/10 group-hover:bg-muted/20 transition-all border-muted-foreground/20">
-                        <p className="text-sm font-bold text-muted-foreground">
-                          {docFile ? docFile.name : "Arraste PDF ou Imagem aqui"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button
-                    className="w-full h-12 rounded-xl font-black shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all"
-                    disabled={
-                      docLoading ||
-                      !docFile ||
-                      !tag ||
-                      (tag === "Outros" && !customTag)
-                    }
-                    onClick={handleDocumento}
-                  >
-                    {docLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-2" />
-                    )}
-                    EFETUAR UPLOAD AGORA
-                  </Button>
-
-                  {extractionResult && (
-                    <ExtractionResultBadge
-                      confianca={extractionResult.confianca}
-                      origem={
-                        extractionResult.confianca >= 0.5
-                          ? "anchor_parser"
-                          : "claude_ocr"
-                      }
-                      camposAtualizados={
-                        extractionResult.campos_simples_atualizados +
-                        extractionResult.bens_criados +
-                        extractionResult.rendimentos_pj_criados +
-                        extractionResult.meses_pf_criados
-                      }
-                      alertas={extractionResult.alertas_revisao}
-                    />
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="md:col-span-2 border-none shadow-sm bg-gradient-to-r from-emerald-50 to-emerald-100/30">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <FileDown className="h-5 w-5 text-emerald-600" />
-                    <CardTitle className="text-xl font-black text-emerald-950">
-                      Finalização do Processo
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      variant={formatoExport === "dec" ? "default" : "outline"}
-                      className={cn(
-                        "h-14 rounded-xl font-black text-[10px] transition-all p-2",
-                        formatoExport === "dec"
-                          ? "bg-emerald-600 hover:bg-emerald-700"
-                          : "border-emerald-200"
-                      )}
-                      onClick={() => setFormatoExport("dec")}
-                    >
-                      ARQUIVO .DEC
-                    </Button>
-                    <Button
-                      variant={formatoExport === "xml" ? "default" : "outline"}
-                      className={cn(
-                        "h-14 rounded-xl font-black text-[10px] transition-all p-2",
-                        formatoExport === "xml"
-                          ? "bg-emerald-600 hover:bg-emerald-700"
-                          : "border-emerald-200"
-                      )}
-                      onClick={() => setFormatoExport("xml")}
-                    >
-                      ARQUIVO .XML
-                    </Button>
-                  </div>
-                  <Button
-                    className="w-full h-16 rounded-2xl font-black text-lg bg-emerald-600 hover:bg-emerald-700 shadow-2xl shadow-emerald-200 group relative overflow-hidden"
-                    disabled={exportando}
-                    onClick={() => handleExportar(formatoExport)}
-                  >
-                    <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-                    <div className="relative flex items-center justify-center">
-                      {exportando ? (
-                        <Loader2 className="h-6 w-6 animate-spin mr-3" />
-                      ) : (
-                        <FileDown className="h-6 w-6 mr-3" />
-                      )}
-                      GERAR DECLARAÇÃO {anoExercicio}
-                    </div>
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
+       
 
           {/* TAB: BENS */}
           <TabsContent value="bens">
