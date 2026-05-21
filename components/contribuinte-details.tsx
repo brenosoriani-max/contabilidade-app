@@ -72,7 +72,7 @@ import {
   getStatusLabel,
 } from "@/lib/format"
 
-import { declaracaoIrpfService, schedulingService } from "@/lib/api/services"
+import { declaracaoIrpfService, schedulingService, contribuinteService } from "@/lib/api/services"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -250,16 +250,22 @@ function Field({
     }
   }
 
+  // Estilo: editável com fundo cinza claro, badge EDITAR à direita
+  const isEditable = editable && onSave
+  const hasValue = value != null && value !== ""
+
   return (
     <div
       className={cn(
-        "p-3 rounded-xl transition-all duration-500 border",
+        "px-4 py-3 rounded-xl transition-all duration-300",
         highlighted
-          ? "bg-primary/5 border-primary ring-2 ring-primary/20 scale-[1.02]"
-          : "border-transparent",
-        editable ? "hover:bg-muted/50 cursor-text" : "hover:bg-muted/30"
+          ? "bg-primary/5 ring-2 ring-primary/20 scale-[1.01]"
+          : isEditable
+            ? "bg-muted/40 hover:bg-muted/60"
+            : "",
+        isEditable ? "cursor-text" : ""
       )}
-      onClick={() => editable && !isEditing && setIsEditing(true)}
+      onClick={() => isEditable && !isEditing && setIsEditing(true)}
     >
       <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">
         {label}
@@ -267,27 +273,26 @@ function Field({
       {isEditing ? (
         <Input
           autoFocus
-          className="h-7 text-sm font-bold bg-background border-primary"
+          className="h-8 text-sm font-bold bg-background border-primary/40 focus-visible:ring-primary/30"
           value={tempValue}
           onChange={(e) => setTempValue(e.target.value)}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
         />
       ) : (
-        <p className="font-bold text-sm tracking-tight flex items-center justify-between">
-          {value ? (
-            value
-          ) : (
-            <span className="text-muted-foreground/40 italic font-normal">
-              Não informado
+        <div className="flex items-center justify-between min-h-[28px]">
+          <p className={cn(
+            "text-sm tracking-tight",
+            hasValue ? "font-bold text-foreground" : "font-normal text-muted-foreground/40 italic"
+          )}>
+            {hasValue ? value : "Não informado"}
+          </p>
+          {isEditable && (
+            <span className="text-[9px] text-primary font-black uppercase tracking-wider opacity-70 hover:opacity-100 transition-opacity ml-2 shrink-0">
+              Editar
             </span>
           )}
-          {editable && !value && (
-            <span className="text-[8px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-black">
-              EDITAR
-            </span>
-          )}
-        </p>
+        </div>
       )}
     </div>
   )
@@ -370,7 +375,10 @@ export const ContribuinteDetails = React.memo(
     }
 
     const handleSaveBem = async () => {
-      if (!declaracaoId) return
+      if (!declaracaoId) {
+        toast.error("Nenhuma declaração vinculada a este contribuinte. Importe um XML primeiro para poder cadastrar bens.")
+        return
+      }
       setSavingBem(true)
       try {
         const url = editingBem 
@@ -383,7 +391,10 @@ export const ContribuinteDetails = React.memo(
           body: JSON.stringify(bemForm),
         })
 
-        if (!res.ok) throw new Error("Erro ao salvar patrimônio")
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData?.message || errData?.erro || "Erro ao salvar patrimônio")
+        }
         
         toast.success(editingBem ? "Bem atualizado!" : "Novo bem cadastrado!")
         setIsBemDialogOpen(false)
@@ -396,7 +407,11 @@ export const ContribuinteDetails = React.memo(
     }
 
     const handleDeleteBem = async (bid: number) => {
-      if (!declaracaoId || !confirm("Deseja realmente excluir este bem?")) return
+      if (!declaracaoId) {
+        toast.error("Nenhuma declaração vinculada a este contribuinte.")
+        return
+      }
+      if (!confirm("Deseja realmente excluir este bem?")) return
       setDeletingBemId(bid)
       try {
         const res = await fetch(`/api/declaracoes/${declaracaoId}/bens/${bid}`, {
@@ -710,23 +725,60 @@ export const ContribuinteDetails = React.memo(
       void loadHistory()
     }, [activeTab, cpf])
 
+    // Mapeamento de fieldPath para coluna do Contribuinte (usada no fallback)
+    const FIELD_TO_CONTRIBUINTE_COLUMN: Record<string, string> = {
+      'identificacao.nome_completo': 'nome',
+      'identificacao.cpf': 'cpf',
+      'identificacao.data_nascimento': 'dataNascimento',
+      'identificacao.titulo_eleitor': 'tituloEleitor',
+      'identificacao.ocupacao_principal': 'ocupacaoPrincipal',
+      'identificacao.natureza_ocupacao': 'naturezaOcupacao',
+      'endereco.cep': 'enderecoCep',
+      'endereco.uf': 'enderecoUf',
+      'endereco.codigo_municipio_ibge': 'enderecoMunicipio',
+      'endereco.bairro': 'enderecoBairro',
+      'endereco.logradouro': 'enderecoLogradouro',
+      'endereco.numero': 'enderecoNumero',
+      'endereco.complemento': 'enderecoComplemento',
+      'contato.email': 'email',
+      'contato.celular': 'telefone',
+    }
+
     async function handleFieldUpdate(fieldPath: string, value: string) {
-      if (!declaracaoId) {
-        toast.error("ID da declaração não encontrado")
-        return
-      }
       setSavingField(fieldPath)
       try {
-        await declaracaoIrpfService.putCampo(declaracaoId, {
-          campo: fieldPath,
-          valor: value,
-        })
-        toast.success("Campo atualizado", {
-          description:
-            "A alteração foi salva e sincronizada com o XML de exportação.",
-        })
+        // Se há declaração vinculada, usa o endpoint de campo (modelo canônico + sync DB)
+        if (declaracaoId) {
+          await declaracaoIrpfService.putCampo(declaracaoId, {
+            campo: fieldPath,
+            valor: value,
+          })
+          toast.success("Campo atualizado", {
+            description:
+              "A alteração foi salva e sincronizada com o XML de exportação.",
+          })
+        } else if (contribuinteId) {
+          // Fallback: atualiza diretamente o Contribuinte no banco
+          const dbColumn = FIELD_TO_CONTRIBUINTE_COLUMN[fieldPath]
+          if (!dbColumn) {
+            toast.error(`Campo '${fieldPath}' não pode ser editado sem uma declaração.`)
+            return
+          }
+          // Monta payload com todos os dados existentes + campo editado
+          const payload: Record<string, unknown> = {
+            nome: contribuinte?.nome || "",
+            [dbColumn]: value,
+          }
+          await contribuinteService.update(contribuinteId, payload)
+          toast.success("Campo atualizado", {
+            description: "O dado foi salvo diretamente no cadastro do contribuinte.",
+          })
+        } else {
+          toast.error("Não foi possível identificar o contribuinte para atualização.")
+          return
+        }
         onDataRefresh?.()
-        carregarChecklist()
+        if (declaracaoId) carregarChecklist()
       } catch (e: any) {
         const msg =
           e?.response?.data?.message ||
