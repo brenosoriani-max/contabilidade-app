@@ -128,6 +128,12 @@ export const importService = {
 };
 
 export const declaracaoIrpfService = {
+  create(data: { contribuinteId: number; anoExercicio: number }) {
+    return unwrap<{ declaracao: any; message: string }>(
+      api.post('/declaracoes', data)
+    );
+  },
+
   importarXml(declaracaoId: number, file: File, anoExercicio?: number) {
     const formData = new FormData();
     formData.append('xml', file);

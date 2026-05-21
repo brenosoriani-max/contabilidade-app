@@ -526,7 +526,10 @@ export async function POST(
         },
       });
     }
-    await storeDeclaracaoBuffer(declaracaoId, `[${tag}] ${file.name}`, buffer);
+    const decUpload = await storeDeclaracaoBuffer(declaracaoId, `[${tag}] ${file.name}`, buffer);
+    if (!storedUrl) {
+      storedUrl = decUpload.publicUrl;
+    }
 
     // ── 2. Tenta OCR com anchor parser (sem IA) ──────────────────
     let extracted: any = await parseDocument(tag, buffer, mediaType);

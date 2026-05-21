@@ -35,6 +35,7 @@ import {
   CheckCircle2,
   AlertCircle,
   FileText,
+  ExternalLink,
   Search,
   ArrowRight,
   Filter,
@@ -72,7 +73,7 @@ import {
   getStatusLabel,
 } from "@/lib/format"
 
-import { declaracaoIrpfService, schedulingService } from "@/lib/api/services"
+import { declaracaoIrpfService, schedulingService, importService } from "@/lib/api/services"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -304,6 +305,26 @@ export const ContribuinteDetails = React.memo(
     const activeTab = searchParams.get("tab") || "dados"
     const [highlightedField, setHighlightedField] = useState<string | null>(null)
 
+    const [selectedManualYear, setSelectedManualYear] = useState<string>("2026")
+    const [creatingManual, setCreatingManual] = useState(false)
+
+    const handleCreateManualDeclaration = async () => {
+      if (!contribuinteId) return
+      setCreatingManual(true)
+      try {
+        const res = await declaracaoIrpfService.create({
+          contribuinteId,
+          anoExercicio: Number(selectedManualYear)
+        })
+        toast.success(res.message || "Declaração manual inicializada com sucesso!")
+        onDataRefresh?.()
+      } catch (e: any) {
+        toast.error(e.message || "Erro ao inicializar declaração")
+      } finally {
+        setCreatingManual(false)
+      }
+    }
+
     const handleTabChange = useCallback(
       (value: string) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -360,7 +381,7 @@ export const ContribuinteDetails = React.memo(
     const openEditBemDialog = (bem: BemDireito) => {
       setEditingBem(bem)
       setBemForm({
-        grupo: String(bem.grupo || ""),
+        grupo: String(bem.grupo || "").padStart(2, "0"),
         codigo: String(bem.codigo || ""),
         descricao: bem.descricao || "",
         valorAnterior: String(bem.valorAnterior || 0),
@@ -492,6 +513,39 @@ export const ContribuinteDetails = React.memo(
     const variationPercent =
       variation / (Number(declaration?.totalBensAnterior) || 1)
 
+    const getDocsForItem = useCallback(
+      (fieldId: string) => {
+        if (!declaration) return []
+        const rawDataMeta = (declaration.rawData as any)?._meta
+        const documentosArquivados = (rawDataMeta?.documentos_arquivados || []) as Array<{
+          tag: string
+          nome_arquivo: string
+          tamanho_bytes: number
+          media_type: string
+          url: string | null
+          origem: string
+          recebido_em: string
+          confianca_extracao?: number
+        }>
+
+        const tagMapping: Record<string, string[]> = {
+          "identificacao.cpf": ["CPF"],
+          "identificacao.titulo_eleitor": ["Título de Eleitor", "Titulo de Eleitor"],
+          "identificacao.rg": ["RG / CNH"],
+          "endereco.logradouro": ["Comprovante de residência", "Comprovante de residencia"],
+          "rendimentos.pj": ["Informe de rendimentos", "Carnê-leão / Recibo autônomo"],
+          "financeiro.extrato": ["Extrato bancário"],
+          "bens": ["Bens e Direitos", "Nota de corretagem / Informe de investimentos", "IPTU / Escritura", "CRLV / Documento do veículo", "Recibo de Aluguel"],
+        }
+
+        const tags = tagMapping[fieldId] || []
+        return documentosArquivados.filter((doc) =>
+          tags.some((tag) => (doc.tag || "").toLowerCase().trim() === tag.toLowerCase().trim())
+        )
+      },
+      [declaration]
+    )
+
     /* ─── checklist items ─── */
     const cadastroItems = useMemo(
       () => [
@@ -590,15 +644,39 @@ export const ContribuinteDetails = React.memo(
 
     /* ─── handlers ─── */
 
-    async function handleImportarXml() {
-      if (!xmlFile || !declaracaoId) return
+    async function handleImportarXml(customFile?: File) {
+      const fileToUpload = customFile || xmlFile
+      if (!fileToUpload) return
       setImportando(true)
       try {
-        await declaracaoIrpfService.importarXml(declaracaoId, xmlFile, anoExercicio)
-        toast.success("XML importado com sucesso!")
-        setXmlFile(null)
-        onDataRefresh?.()
-        carregarChecklist()
+        if (declaracaoId) {
+          await declaracaoIrpfService.importarXml(declaracaoId, fileToUpload, anoExercicio)
+          toast.success("XML importado com sucesso!")
+          setXmlFile(null)
+          onDataRefresh?.()
+          carregarChecklist()
+        } else {
+          const res = await importService.xml([fileToUpload])
+          const result = res.results?.[0]
+          if (result && result.success) {
+            const cleanCpfCurrent = (cpf || "").replace(/\D/g, "")
+            const cleanCpfResult = (result.cpf || "").replace(/\D/g, "")
+            if (cleanCpfCurrent && cleanCpfResult && cleanCpfCurrent !== cleanCpfResult) {
+              toast.error("O arquivo XML enviado pertence a outro contribuinte!", {
+                description: `O XML pertence a ${result.nome} (CPF: ${formatCPF(result.cpf)}). Por favor, envie o XML correto para este contribuinte.`,
+                duration: 8000
+              })
+            } else {
+              toast.success("XML importado com sucesso!", {
+                description: `Declaração criada e dados fiscais importados para ${result.nome}.`
+              })
+              setXmlFile(null)
+              onDataRefresh?.()
+            }
+          } else {
+            throw new Error(String(result?.error || res.message || "Erro na importação"))
+          }
+        }
       } catch (e: any) {
         toast.error(e.message || "Erro ao importar XML")
       } finally {
@@ -960,8 +1038,8 @@ export const ContribuinteDetails = React.memo(
           </div>
         </div>
 
-        {/* KPI CARDS */}
-        {declaration && (
+        {/* KPI CARDS / EMPTY BANNER */}
+        {declaration ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               title="Rendimentos"
@@ -990,6 +1068,85 @@ export const ContribuinteDetails = React.memo(
               }
             />
           </div>
+        ) : (
+          <Card className="border-none shadow-xl overflow-hidden bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-yellow-500/10 border border-amber-500/20 rounded-[2.5rem]">
+            <CardContent className="p-8">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="space-y-3 max-w-2xl text-center md:text-left">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-black uppercase tracking-widest">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    Declaração Não Iniciada
+                  </div>
+                  <h3 className="text-2xl font-black tracking-tight text-foreground">
+                    Este contribuinte não possui nenhuma declaração ativa para o exercício atual.
+                  </h3>
+                  <p className="text-sm font-bold text-muted-foreground leading-relaxed font-sans">
+                    Você pode iniciar o preenchimento manual agora mesmo escolhendo o ano do exercício, ou fazer o upload do arquivo XML anterior para importar e preencher automaticamente todos os bens e dados cadastrais.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto shrink-0">
+                  <div className="flex items-center gap-2 bg-background/85 backdrop-blur-sm p-1.5 rounded-2xl border shadow-sm w-full sm:w-auto">
+                    <Select value={selectedManualYear} onValueChange={setSelectedManualYear}>
+                      <SelectTrigger className="w-[100px] h-10 border-none bg-transparent font-black text-xs shadow-none focus:ring-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="2026" className="font-black text-xs">2026</SelectItem>
+                        <SelectItem value="2025" className="font-black text-xs">2025</SelectItem>
+                        <SelectItem value="2024" className="font-black text-xs">2024</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      className="h-10 px-5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md shadow-primary/10"
+                      onClick={handleCreateManualDeclaration}
+                      disabled={creatingManual}
+                    >
+                      {creatingManual ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        "Iniciar Manual"
+                      )}
+                    </Button>
+                  </div>
+
+                  <span className="text-xs font-black text-muted-foreground/60 uppercase">OU</span>
+
+                  <div className="relative w-full sm:w-auto">
+                    <input
+                      type="file"
+                      accept=".xml"
+                      className="hidden"
+                      id="xml-upload-empty-state"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          await handleImportarXml(file)
+                        }
+                      }}
+                      disabled={importando}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 w-full sm:w-auto px-6 rounded-2xl font-black text-[10px] uppercase tracking-widest border-2 border-primary/20 bg-background/50 hover:bg-primary/5 hover:border-primary/40 transition-all gap-2"
+                      asChild
+                    >
+                      <Label htmlFor="xml-upload-empty-state" className="cursor-pointer flex items-center justify-center h-full w-full">
+                        {importando ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : (
+                          <Upload className="h-4 w-4 mr-2" />
+                        )}
+                        Importar XML
+                      </Label>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* TABS */}
@@ -998,7 +1155,7 @@ export const ContribuinteDetails = React.memo(
           onValueChange={handleTabChange}
           className="space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-4 h-12 bg-muted/30 p-1 rounded-xl">
+          <TabsList className="grid w-full grid-cols-5 h-12 bg-muted/30 p-1 rounded-xl">
             <TabsTrigger
               value="dados"
               className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
@@ -1053,42 +1210,42 @@ export const ContribuinteDetails = React.memo(
                     label="Nome Completo"
                     value={contribuinte.nome}
                     highlighted={highlightedField === "identificacao.nome_completo"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("identificacao.nome_completo", v)}
                   />
                   <Field
                     label="Natureza Ocupação"
                     value={contribuinte.naturezaOcupacao}
                     highlighted={highlightedField === "identificacao.natureza_ocupacao"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("identificacao.natureza_ocupacao", v)}
                   />
                   <Field
                     label="Ocupação Principal"
                     value={contribuinte.ocupacaoPrincipal}
                     highlighted={highlightedField === "identificacao.ocupacao_principal"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("identificacao.ocupacao_principal", v)}
                   />
                   <Field
                     label="CPF"
                     value={formatCPF(contribuinte.cpf)}
                     highlighted={highlightedField === "identificacao.cpf"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("identificacao.cpf", v)}
                   />
                   <Field
                     label="Data Nascimento"
                     value={formatDate(contribuinte.dataNascimento)}
                     highlighted={highlightedField === "identificacao.data_nascimento"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("identificacao.data_nascimento", v)}
                   />
                   <Field
                     label="Título de Eleitor"
                     value={contribuinte.tituloEleitor}
                     highlighted={highlightedField === "identificacao.titulo_eleitor"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("identificacao.titulo_eleitor", v)}
                   />
                 </CardContent>
@@ -1108,21 +1265,21 @@ export const ContribuinteDetails = React.memo(
                     label="CEP"
                     value={formatCEP(contribuinte.enderecoCep)}
                     highlighted={highlightedField === "endereco.cep"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("endereco.cep", v)}
                   />
                   <Field
                     label="Endereço"
                     value={contribuinte.enderecoLogradouro}
                     highlighted={highlightedField === "endereco.logradouro"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("endereco.logradouro", v)}
                   />
                   <Field
                     label="Complemento"
                     value={contribuinte.enderecoComplemento}
                     highlighted={highlightedField === "endereco.complemento"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("endereco.complemento", v)}
                   />
                   <Field
@@ -1134,14 +1291,14 @@ export const ContribuinteDetails = React.memo(
                     label="Email"
                     value={contribuinte.email}
                     highlighted={highlightedField === "contato.email"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("contato.email", v)}
                   />
                   <Field
                     label="Telefone/Celular"
                     value={contribuinte.telefone}
                     highlighted={highlightedField === "contato.celular"}
-                    editable
+                    editable={!!declaracaoId}
                     onSave={(v) => handleFieldUpdate("contato.celular", v)}
                   />
                 </CardContent>
@@ -1313,6 +1470,32 @@ export const ContribuinteDetails = React.memo(
                                         ? `Valor: ${item.value}`
                                         : "Pendente de validação no sistema"}
                                     </p>
+                                    {getDocsForItem(item.fieldId).length > 0 && (
+                                      <div className="mt-2 flex flex-wrap gap-2 animate-in fade-in-50 duration-300">
+                                        {getDocsForItem(item.fieldId).map((doc, dIdx) => (
+                                          <a
+                                            key={dIdx}
+                                            href={doc.url || "#"}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/5 hover:bg-primary/10 border border-primary/10 hover:border-primary/20 text-[10px] font-bold text-primary transition-all group/doc"
+                                            onClick={(e) => {
+                                              if (!doc.url) {
+                                                e.preventDefault()
+                                                toast.error("URL do arquivo não disponível.")
+                                              }
+                                            }}
+                                          >
+                                            <FileText className="h-3.5 w-3.5 text-primary/80" />
+                                            <span className="max-w-[150px] truncate">{doc.nome_arquivo}</span>
+                                            <span className="text-[8px] text-muted-foreground opacity-85">
+                                              ({(doc.tamanho_bytes / 1024).toFixed(1)} KB)
+                                            </span>
+                                            <ExternalLink className="h-3 w-3 opacity-60 group-hover/doc:opacity-100 group-hover/doc:translate-x-0.5 transition-all" />
+                                          </a>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
 
@@ -1388,7 +1571,7 @@ export const ContribuinteDetails = React.memo(
                   <Button
                     className="w-full h-12 rounded-xl font-bold transition-all"
                     variant={xmlFile ? "default" : "outline"}
-                    onClick={handleImportarXml}
+                    onClick={() => handleImportarXml()}
                     disabled={importando || !xmlFile}
                   >
                     {importando ? (
@@ -1576,6 +1759,7 @@ export const ContribuinteDetails = React.memo(
                       size="sm"
                       className="h-11 rounded-xl font-black text-[10px] uppercase tracking-widest px-6 shadow-lg shadow-primary/20"
                       onClick={openNewBemDialog}
+                      disabled={!declaracaoId}
                     >
                       <Package className="mr-2 h-4 w-4" />
                       Novo Bem
@@ -1621,8 +1805,9 @@ export const ContribuinteDetails = React.memo(
                       Nenhum bem declarado
                     </h3>
                     <p className="text-sm text-muted-foreground/60 mt-2 max-w-xs">
-                      Os bens aparecerão aqui após a importação do XML ou
-                      lançamento manual.
+                      {!declaracaoId
+                        ? "Por favor, inicialize a declaração do contribuinte no topo da página para lançar bens manualmente."
+                        : "Os bens aparecerão aqui após a importação do XML ou lançamento manual."}
                     </p>
                   </div>
                 ) : filteredAssets.length > 50 ? (
