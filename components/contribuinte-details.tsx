@@ -1589,60 +1589,6 @@ export const ContribuinteDetails = React.memo(
                   )}
                 </CardContent>
               </Card>
-
-              <Card className="md:col-span-2 border-none shadow-sm bg-gradient-to-r from-emerald-50 to-emerald-100/30">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <FileDown className="h-5 w-5 text-emerald-600" />
-                    <CardTitle className="text-xl font-black text-emerald-950">
-                      Finalização do Processo
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      variant={formatoExport === "dec" ? "default" : "outline"}
-                      className={cn(
-                        "h-14 rounded-xl font-black text-[10px] transition-all p-2",
-                        formatoExport === "dec"
-                          ? "bg-emerald-600 hover:bg-emerald-700"
-                          : "border-emerald-200"
-                      )}
-                      onClick={() => setFormatoExport("dec")}
-                    >
-                      ARQUIVO .DEC
-                    </Button>
-                    <Button
-                      variant={formatoExport === "xml" ? "default" : "outline"}
-                      className={cn(
-                        "h-14 rounded-xl font-black text-[10px] transition-all p-2",
-                        formatoExport === "xml"
-                          ? "bg-emerald-600 hover:bg-emerald-700"
-                          : "border-emerald-200"
-                      )}
-                      onClick={() => setFormatoExport("xml")}
-                    >
-                      ARQUIVO .XML
-                    </Button>
-                  </div>
-                  <Button
-                    className="w-full h-16 rounded-2xl font-black text-lg bg-emerald-600 hover:bg-emerald-700 shadow-2xl shadow-emerald-200 group relative overflow-hidden"
-                    disabled={exportando}
-                    onClick={() => handleExportar(formatoExport)}
-                  >
-                    <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-                    <div className="relative flex items-center justify-center">
-                      {exportando ? (
-                        <Loader2 className="h-6 w-6 animate-spin mr-3" />
-                      ) : (
-                        <FileDown className="h-6 w-6 mr-3" />
-                      )}
-                      GERAR DECLARAÇÃO {anoExercicio}
-                    </div>
-                  </Button>
-                </CardContent>
-              </Card>
             </div>
           </TabsContent>
 
