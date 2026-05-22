@@ -35,14 +35,37 @@ export function formatCPF(cpf: string | undefined | null): string {
 
 export function formatDate(date: string | Date | undefined | null): string {
   if (!date) return ''
-  const d = typeof date === 'string' ? new Date(date) : date
-  if (isNaN(d.getTime())) {
-    // Try to parse BR format
-    if (typeof date === 'string' && date.includes('/')) {
-      return date.split(' ')[0]
-    }
-    return String(date)
+
+  // Date object
+  if (date instanceof Date) {
+    if (isNaN(date.getTime())) return ''
+    return date.toLocaleDateString('pt-BR')
   }
+
+  const dateOnly = date.split(' ')[0]
+
+  // Formato BR: DD/MM/YYYY ou DD/MM
+  if (dateOnly.includes('/')) {
+    const parts = dateOnly.split('/')
+    const day   = Number(parts[0])
+    const month = Number(parts[1])
+    const year  = parts[2] ? Number(parts[2]) : new Date().getFullYear()
+
+    const d = new Date(year, month - 1, day) // local time, sem UTC
+    if (!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR')
+    return dateOnly
+  }
+
+  // Formato ISO: YYYY-MM-DD — parseia como local time para evitar UTC shift
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateOnly)) {
+    const [year, month, day] = dateOnly.split('-').map(Number)
+    const d = new Date(year, month - 1, day) // local time, sem UTC
+    if (!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR')
+  }
+
+  // Fallback
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return String(date)
   return d.toLocaleDateString('pt-BR')
 }
 
