@@ -1629,20 +1629,6 @@ export const ContribuinteDetails = React.memo(
                           <div>
                             <CardTitle className="text-sm font-black tracking-tight flex items-center gap-2">
                               Visualizador
-                              {viewerDoc?.confianca_extracao !== undefined && (
-                                <Badge
-                                  className={cn(
-                                    "h-4 text-[8px] font-black px-1.5 border-none",
-                                    viewerDoc.confianca_extracao >= 0.8
-                                      ? "bg-emerald-500/10 text-emerald-600"
-                                      : viewerDoc.confianca_extracao >= 0.5
-                                        ? "bg-amber-500/10 text-amber-600"
-                                        : "bg-red-500/10 text-red-600"
-                                  )}
-                                >
-                                  IA {Math.round(viewerDoc.confianca_extracao * 100)}%
-                                </Badge>
-                              )}
                             </CardTitle>
                             <div className="flex items-center gap-2 mt-0.5">
                               <CardDescription className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 truncate max-w-[150px]">
