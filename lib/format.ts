@@ -149,3 +149,15 @@ export function getStatusLabel(status: string): string {
       return status
   }
 }
+export function maskBRL(value: string): string {
+  const onlyDigits = value.replace(/\D/g, "");
+  const numericValue = Number(onlyDigits) / 100;
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(numericValue);
+}
+
+export function parseBRLToNumber(value: string): number {
+  return Number(value.replace(/\D/g, "")) / 100;
+}

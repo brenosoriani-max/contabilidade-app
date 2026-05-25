@@ -51,6 +51,19 @@ import {
   Bell,
   Trash2,
   Pencil,
+  X,
+  RotateCw,
+  Sparkles,
+  Car,
+  CreditCard,
+  Wallet,
+  Coins,
+  Calendar,
+  Info,
+  Maximize,
+  Maximize2,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react"
 
 import type {
@@ -71,6 +84,8 @@ import {
   getResultLabel,
   getStatusColor,
   getStatusLabel,
+  maskBRL,
+  parseBRLToNumber,
 } from "@/lib/format"
 
 import { declaracaoIrpfService, schedulingService, importService, contribuinteService } from "@/lib/api/services"
@@ -116,7 +131,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { 
+import {
   AppHeader,
 } from "@/components/app-header"
 
@@ -154,15 +169,66 @@ const TAGS = [
 ] as const
 
 const GRUPOS_BENS: Record<string, string> = {
-  "01": "Bens Imóveis",
-  "02": "Bens Móveis",
-  "03": "Participações",
-  "04": "Investimentos",
-  "05": "Créditos",
-  "06": "Depósitos",
-  "07": "Fundos",
-  "08": "Criptoativos",
-  "09": "Outros",
+  "01": "01 - Bens Imóveis",
+  "02": "02 - Bens Móveis",
+  "03": "03 - Participações Societárias",
+  "04": "04 - Aplicações e Investimentos",
+  "05": "05 - Créditos",
+  "06": "06 - Depósitos à Vista e Numerário",
+  "07": "07 - Fundos",
+  "08": "08 - Criptoativos",
+  "09": "09 - Outros Bens e Direitos",
+}
+
+const CODIGOS_BENS: Record<string, Record<string, string>> = {
+  "01": {
+    "01": "Prédio residencial",
+    "11": "Apartamento",
+    "12": "Casa",
+    "13": "Terreno",
+    "14": "Sala ou conjunto",
+    "15": "Construção",
+    "16": "Benfeitorias",
+    "17": "Loja",
+    "18": "Galpão",
+    "19": "Vaga de garagem",
+    "99": "Outros bens imóveis",
+  },
+  "02": {
+    "01": "Veículo automotor terrestre (carro, moto, etc)",
+    "02": "Aeronave",
+    "03": "Embarcação",
+    "99": "Outros bens móveis",
+  },
+  "03": {
+    "01": "Ações (inclusive as provenientes de linha telefônica)",
+    "02": "Quotas ou quinhões de capital",
+    "99": "Outras participações societárias",
+  },
+  "04": {
+    "01": "Caderneta de poupança",
+    "02": "Ativos financeiros (Tesouro Direto, CDB, RDB, etc)",
+    "03": "Títulos públicos e privados sujeitos a tributação",
+    "99": "Outras aplicações e investimentos",
+  },
+  "06": {
+    "01": "Depósito em conta corrente no País",
+    "02": "Depósito em conta corrente no Exterior",
+    "99": "Outros depósitos à vista e numerário",
+  },
+  "07": {
+    "01": "Fundos de Investimento Imobiliário (FII)",
+    "02": "Fundos de Investimento em Ações (FIA)",
+    "03": "Fundos de Investimento em Índice de Mercado (ETF)",
+    "99": "Outros fundos",
+  },
+  "08": {
+    "01": "Criptoativo Bitcoin (BTC)",
+    "02": "Outras criptomoedas (Altcoins)",
+    "03": "Stablecoins",
+    "10": "NFTs",
+    "99": "Outros criptoativos",
+  },
 }
 
 const PIPELINE_ORDER = [
@@ -172,8 +238,6 @@ const PIPELINE_ORDER = [
   "pronto_envio",
   "entregue",
 ]
-
-
 
 type StepStatus = "done" | "active" | "pending"
 
@@ -227,7 +291,6 @@ function Field({
   const [isEditing, setIsEditing] = useState(false)
   const [tempValue, setTempValue] = useState<string>((value ?? "").toString())
 
-  // Sincroniza tempValue quando o valor externo muda (ex: após onDataRefresh)
   useEffect(() => {
     if (!isEditing) {
       setTempValue((value ?? "").toString())
@@ -241,7 +304,6 @@ function Field({
     const normalized = tempValue.trim()
     const original = (value ?? "").toString().trim()
 
-    // Evita dupla submissão (Enter + blur no re-render)
     if (normalized === original) return
     if (hasSavedForCurrentValueRef.current === normalized) return
 
@@ -260,7 +322,6 @@ function Field({
     }
   }
 
-  // Estilo: editável com fundo cinza claro, badge EDITAR à direita
   const isEditable = editable && onSave
   const hasValue = value != null && value !== ""
 
@@ -308,8 +369,6 @@ function Field({
   )
 }
 
-
-
 export const ContribuinteDetails = React.memo(
   ({ declaration, contribuinte, assets = [], onDataRefresh }: Props) => {
     const searchParams = useSearchParams()
@@ -328,7 +387,7 @@ export const ContribuinteDetails = React.memo(
       try {
         const res = await declaracaoIrpfService.create({
           contribuinteId,
-          anoExercicio: Number(selectedManualYear)
+          anoExercicio: Number(selectedManualYear),
         })
         toast.success(res.message || "Declaração manual inicializada com sucesso!")
         onDataRefresh?.()
@@ -363,7 +422,7 @@ export const ContribuinteDetails = React.memo(
     const [formatoExport, setFormatoExport] = useState<"xml" | "posicional" | "dec">("dec")
     const [customTag, setCustomTag] = useState("")
     const [manualChecks, setManualChecks] = useState<Record<string, boolean>>({})
-    const [viewerOpen, setViewerOpen] = useState(true)
+
     const [viewerDoc, setViewerDoc] = useState<
       | null
       | {
@@ -378,6 +437,7 @@ export const ContribuinteDetails = React.memo(
         }
     >(null)
 
+    const [isViewerMaximized, setIsViewerMaximized] = useState(false)
 
     const [savingField, setSavingField] = useState<string | null>(null)
     const [schedulingHistory, setSchedulingHistory] = useState<Scheduling[]>([])
@@ -387,12 +447,52 @@ export const ContribuinteDetails = React.memo(
     const [isBemDialogOpen, setIsBemDialogOpen] = useState(false)
     const [editingBem, setEditingBem] = useState<BemDireito | null>(null)
     const [bemForm, setBemForm] = useState({
-      grupo: "",
-      codigo: "",
+      grupo: "01",
+      codigo: "01",
       descricao: "",
-      valorAnterior: "",
-      valorAtual: "",
+      valorAnterior: "R$ 0,00",
+      valorAtual: "R$ 0,00",
+      // Detalhes extras
+      iptu: "",
+      dataAquisicao: "",
+      areaTotal: "",
+      areaUnidade: "m2",
+      registradoCartorio: false,
+      cartorioNome: "",
+      cartorioMatricula: "",
+      renavam: "",
+      placa: "",
+      cnpjInst: "",
+      nomeInst: "",
+      agencia: "",
+      conta: "",
+      digito: "",
     })
+
+    const generateDescricao = () => {
+      let desc = ""
+      const g = bemForm.grupo
+      const c = bemForm.codigo
+
+      if (g === "01") {
+        desc = `${CODIGOS_BENS[g]?.[c] || "Bem Imóvel"}. IPTU: ${bemForm.iptu || "Não informado"}. `
+        if (bemForm.dataAquisicao) desc += `Adquirido em ${formatDate(bemForm.dataAquisicao)}. `
+        desc += `Área: ${bemForm.areaTotal || "0"}${bemForm.areaUnidade}. `
+        if (bemForm.registradoCartorio) {
+          desc += `Registrado no Cartório ${bemForm.cartorioNome || "N/A"}, Matrícula ${bemForm.cartorioMatricula || "N/A"}. `
+        } else {
+          desc += `Não registrado em cartório até o momento. `
+        }
+      } else if (g === "02" && c === "01") {
+        desc = `VEÍCULO: ${CODIGOS_BENS[g][c]}. RENAVAM: ${bemForm.renavam || "N/A"}. PLACA: ${bemForm.placa || "N/A"}. `
+      } else if (["03", "04", "06", "07"].includes(g)) {
+        desc = `${CODIGOS_BENS[g]?.[c] || "Ativo Financeiro"}. INSTITUIÇÃO: ${bemForm.nomeInst || "N/A"} (CNPJ: ${bemForm.cnpjInst || "N/A"}). `
+        if (bemForm.agencia) desc += `AG: ${bemForm.agencia} `
+        if (bemForm.conta) desc += `CC: ${bemForm.conta}-${bemForm.digito || "0"}. `
+      }
+
+      setBemForm(prev => ({ ...prev, descricao: desc.trim() }))
+    }
     const [savingBem, setSavingBem] = useState(false)
     const [deletingBemId, setDeletingBemId] = useState<number | null>(null)
 
@@ -402,8 +502,22 @@ export const ContribuinteDetails = React.memo(
         grupo: "01",
         codigo: "01",
         descricao: "",
-        valorAnterior: "0",
-        valorAtual: "0",
+        valorAnterior: "R$ 0,00",
+        valorAtual: "R$ 0,00",
+        iptu: "",
+        dataAquisicao: "",
+        areaTotal: "",
+        areaUnidade: "m2",
+        registradoCartorio: false,
+        cartorioNome: "",
+        cartorioMatricula: "",
+        renavam: "",
+        placa: "",
+        cnpjInst: "",
+        nomeInst: "",
+        agencia: "",
+        conta: "",
+        digito: "",
       })
       setIsBemDialogOpen(true)
     }
@@ -412,10 +526,25 @@ export const ContribuinteDetails = React.memo(
       setEditingBem(bem)
       setBemForm({
         grupo: String(bem.grupo || "").padStart(2, "0"),
-        codigo: String(bem.codigo || ""),
+        codigo: String(bem.codigo || "").padStart(2, "0"),
         descricao: bem.descricao || "",
-        valorAnterior: String(bem.valorAnterior || 0),
-        valorAtual: String(bem.valorAtual || 0),
+        valorAnterior: maskBRL(String(bem.valorAnterior || 0).replace(".", "")),
+        valorAtual: maskBRL(String(bem.valorAtual || 0).replace(".", "")),
+        // Reset extras on edit since we don't parse yet
+        iptu: "",
+        dataAquisicao: "",
+        areaTotal: "",
+        areaUnidade: "m2",
+        registradoCartorio: false,
+        cartorioNome: "",
+        cartorioMatricula: "",
+        renavam: "",
+        placa: "",
+        cnpjInst: "",
+        nomeInst: "",
+        agencia: "",
+        conta: "",
+        digito: "",
       })
       setIsBemDialogOpen(true)
     }
@@ -427,21 +556,27 @@ export const ContribuinteDetails = React.memo(
       }
       setSavingBem(true)
       try {
-        const url = editingBem 
+        const url = editingBem
           ? `/api/declaracoes/${declaracaoId}/bens/${editingBem.id}`
           : `/api/declaracoes/${declaracaoId}/bens`
-        
+
+        const payload = {
+          ...bemForm,
+          valorAnterior: parseBRLToNumber(bemForm.valorAnterior),
+          valorAtual: parseBRLToNumber(bemForm.valorAtual),
+        }
+
         const res = await fetch(url, {
           method: editingBem ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(bemForm),
+          body: JSON.stringify(payload),
         })
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}))
           throw new Error(errData?.message || errData?.erro || "Erro ao salvar patrimônio")
         }
-        
+
         toast.success(editingBem ? "Bem atualizado!" : "Novo bem cadastrado!")
         setIsBemDialogOpen(false)
         onDataRefresh?.()
@@ -623,9 +758,7 @@ export const ContribuinteDetails = React.memo(
         },
         {
           label: "Endereço Completo",
-          ok: !!(
-            contribuinte.enderecoLogradouro && contribuinte.enderecoMunicipio
-          ),
+          ok: !!(contribuinte.enderecoLogradouro && contribuinte.enderecoMunicipio),
           value: contribuinte.enderecoLogradouro
             ? `${contribuinte.enderecoLogradouro}, ${contribuinte.enderecoMunicipio}`
             : null,
@@ -704,11 +837,11 @@ export const ContribuinteDetails = React.memo(
             if (cleanCpfCurrent && cleanCpfResult && cleanCpfCurrent !== cleanCpfResult) {
               toast.error("O arquivo XML enviado pertence a outro contribuinte!", {
                 description: `O XML pertence a ${result.nome} (CPF: ${formatCPF(result.cpf)}). Por favor, envie o XML correto para este contribuinte.`,
-                duration: 8000
+                duration: 8000,
               })
             } else {
               toast.success("XML importado com sucesso!", {
-                description: `Declaração criada e dados fiscais importados para ${result.nome}.`
+                description: `Declaração criada e dados fiscais importados para ${result.nome}.`,
               })
               setXmlFile(null)
               onDataRefresh?.()
@@ -803,7 +936,6 @@ export const ContribuinteDetails = React.memo(
       }
     }, [declaracaoId, shouldAutoLoadChecklist])
 
-    // Limpa o highlight após 3 segundos
     useEffect(() => {
       if (!highlightedField) return
       const timer = setTimeout(() => setHighlightedField(null), 3000)
@@ -812,7 +944,7 @@ export const ContribuinteDetails = React.memo(
 
     useEffect(() => {
       if (activeTab !== "agendamentos" || !cpf) return
-      
+
       async function loadHistory() {
         setLoadingHistory(true)
         try {
@@ -824,56 +956,48 @@ export const ContribuinteDetails = React.memo(
           setLoadingHistory(false)
         }
       }
-      
+
       void loadHistory()
     }, [activeTab, cpf])
 
-    // Mapeamento de fieldPath para coluna do Contribuinte (usada no fallback)
     const FIELD_TO_CONTRIBUINTE_COLUMN: Record<string, string> = {
-      'identificacao.nome_completo': 'nome',
-      'identificacao.cpf': 'cpf',
-      'identificacao.data_nascimento': 'dataNascimento',
-      'identificacao.titulo_eleitor': 'tituloEleitor',
-      'identificacao.ocupacao_principal': 'ocupacaoPrincipal',
-      'identificacao.natureza_ocupacao': 'naturezaOcupacao',
-      'endereco.cep': 'enderecoCep',
-      'endereco.uf': 'enderecoUf',
-      'endereco.codigo_municipio_ibge': 'enderecoMunicipio',
-      'endereco.bairro': 'enderecoBairro',
-      'endereco.logradouro': 'enderecoLogradouro',
-      'endereco.numero': 'enderecoNumero',
-      'endereco.complemento': 'enderecoComplemento',
-      'contato.email': 'email',
-      'contato.celular': 'telefone',
+      "identificacao.nome_completo": "nome",
+      "identificacao.cpf": "cpf",
+      "identificacao.data_nascimento": "dataNascimento",
+      "identificacao.titulo_eleitor": "tituloEleitor",
+      "identificacao.ocupacao_principal": "ocupacaoPrincipal",
+      "identificacao.natureza_ocupacao": "naturezaOcupacao",
+      "endereco.cep": "enderecoCep",
+      "endereco.uf": "enderecoUf",
+      "endereco.codigo_municipio_ibge": "enderecoMunicipio",
+      "endereco.bairro": "enderecoBairro",
+      "endereco.logradouro": "enderecoLogradouro",
+      "endereco.numero": "enderecoNumero",
+      "endereco.complemento": "enderecoComplemento",
+      "contato.email": "email",
+      "contato.celular": "telefone",
     }
 
     const fieldUpdateSeqRef = React.useRef(0)
 
     async function handleFieldUpdate(fieldPath: string, value: string) {
       const seq = ++fieldUpdateSeqRef.current
-      console.log('[handleFieldUpdate] START', { seq, fieldPath, value })
-      // garante que o console apareça mesmo se filtros estiverem ativos
-      void 0
       setSavingField(fieldPath)
       try {
-        // Se há declaração vinculada, usa o endpoint de campo (modelo canônico + sync DB)
         if (declaracaoId) {
           await declaracaoIrpfService.putCampo(declaracaoId, {
             campo: fieldPath,
             valor: value,
           })
           toast.success("Campo atualizado", {
-            description:
-              "A alteração foi salva e sincronizada com o XML de exportação.",
+            description: "A alteração foi salva e sincronizada com o XML de exportação.",
           })
         } else if (contribuinteId) {
-          // Fallback: atualiza diretamente o Contribuinte no banco
           const dbColumn = FIELD_TO_CONTRIBUINTE_COLUMN[fieldPath]
           if (!dbColumn) {
             toast.error(`Campo '${fieldPath}' não pode ser editado sem uma declaração.`)
             return
           }
-          // Monta payload com todos os dados existentes + campo editado
           const payload: Record<string, unknown> = {
             nome: contribuinte?.nome || "",
             [dbColumn]: value,
@@ -887,7 +1011,6 @@ export const ContribuinteDetails = React.memo(
           return
         }
 
-        // Evita que um refresh atrasado “apague” o que foi salvo no update mais recente
         if (seq === fieldUpdateSeqRef.current) {
           onDataRefresh?.()
           if (declaracaoId) carregarChecklist()
@@ -965,909 +1088,1071 @@ export const ContribuinteDetails = React.memo(
               </Badge>
             </div>
           </div>
-
-          
         </div>
 
         <div className="px-8 pb-12 space-y-6">
-        {/* HEADER */}
-        <div className="flex flex-col gap-4">
-          <Card className="border-none shadow-sm bg-background/60 backdrop-blur-md border border-white/20">
-            <CardHeader className="p-6">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
-                    <User className="h-7 w-7" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-2xl font-black tracking-tight text-foreground">
-                        {contribuinte.nome}
-                      </h2>
-                      <Badge
-                        className={cn(
-                          statusClasses,
-                          "rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-wider"
-                        )}
-                      >
-                        {statusLabel}
-                      </Badge>
-                    </div>
-                    <div className="mt-1 flex items-center gap-3">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground/70">
-                        <FileText className="h-3 w-3" />
-                        {formatCPF(contribuinte.cpf)}
-                      </div>
-                      <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
-                      <Badge
-                        variant="outline"
-                        className="h-5 text-[10px] font-bold border-muted-foreground/20"
-                      >
-                        EXERCÍCIO {anoExercicio}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-9 rounded-xl font-bold border-muted-foreground/20 hover:bg-primary/5 transition-all group"
-                      >
-                        {exportando ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <FileDown className="mr-2 h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
-                        )}
-                        EXPORTAR
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-56 rounded-xl border-white/20 bg-background/80 backdrop-blur-md"
-                    >
-                      <DropdownMenuItem
-                        onClick={() => handleExportar("posicional")}
-                        className="cursor-pointer font-bold gap-2"
-                      >
-                        <FileText className="h-4 w-4 text-primary" />
-                        Arquivo .DEC (Layout RFB)
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleExportar("xml")}
-                        className="cursor-pointer font-bold gap-2 text-xs"
-                      >
-                        <FileCode className="h-3.5 w-3.5 text-primary" />
-                        XML Bruto
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={handleExportarPdf}
-                        className="cursor-pointer font-bold gap-2 text-xs text-emerald-600"
-                      >
-                        <FileDown className="h-3.5 w-3.5" />
-                        Dossiê PDF Completo
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </CardHeader>
-          </Card>
-        </div>
-
-        {/* KPI CARDS / EMPTY BANNER */}
-        {declaration ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title="Rendimentos"
-              value={formatCurrency(declaration.totalRendPJ)}
-              icon={<Landmark className="h-5 w-5" />}
-            />
-            <StatCard
-              title="IRRF"
-              value={formatCurrency(declaration.totalIRRF)}
-              icon={<Calculator className="h-5 w-5" />}
-            />
-            <StatCard
-              title="Patrimônio"
-              value={formatCurrency(declaration.totalBensAtual)}
-              icon={<Building2 className="h-5 w-5" />}
-            />
-            <StatCard
-              title="Variação"
-              value={`${variation >= 0 ? "+" : ""}${formatPercent(variationPercent)}`}
-              icon={
-                variation >= 0 ? (
-                  <TrendingUp className="h-5 w-5 text-emerald-600" />
-                ) : (
-                  <TrendingDown className="h-5 w-5 text-red-500" />
-                )
-              }
-            />
-          </div>
-        ) : (
-          <Card className="border-none shadow-xl overflow-hidden bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-yellow-500/10 border border-amber-500/20 rounded-[2.5rem]">
-            <CardContent className="p-8">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="space-y-3 max-w-2xl text-center md:text-left">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-black uppercase tracking-widest">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    Declaração Não Iniciada
-                  </div>
-                  <h3 className="text-2xl font-black tracking-tight text-foreground">
-                    Este contribuinte não possui nenhuma declaração ativa para o exercício atual.
-                  </h3>
-                  <p className="text-sm font-bold text-muted-foreground leading-relaxed font-sans">
-                    Você pode iniciar o preenchimento manual agora mesmo escolhendo o ano do exercício, ou fazer o upload do arquivo XML anterior para importar e preencher automaticamente todos os bens e dados cadastrais.
-                  </p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto shrink-0">
-                  <div className="flex items-center gap-2 bg-background/85 backdrop-blur-sm p-1.5 rounded-2xl border shadow-sm w-full sm:w-auto">
-                    <Select value={selectedManualYear} onValueChange={setSelectedManualYear}>
-                      <SelectTrigger className="w-[100px] h-10 border-none bg-transparent font-black text-xs shadow-none focus:ring-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="2026" className="font-black text-xs">2026</SelectItem>
-                        <SelectItem value="2025" className="font-black text-xs">2025</SelectItem>
-                        <SelectItem value="2024" className="font-black text-xs">2024</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      size="sm"
-                      className="h-10 px-5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md shadow-primary/10"
-                      onClick={handleCreateManualDeclaration}
-                      disabled={creatingManual}
-                    >
-                      {creatingManual ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        "Iniciar Manual"
-                      )}
-                    </Button>
-                  </div>
-
-                  <span className="text-xs font-black text-muted-foreground/60 uppercase">OU</span>
-
-                  <div className="relative w-full sm:w-auto">
-                    <input
-                      type="file"
-                      accept=".xml"
-                      className="hidden"
-                      id="xml-upload-empty-state"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0]
-                        if (file) {
-                          await handleImportarXml(file)
-                        }
-                      }}
-                      disabled={importando}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-10 w-full sm:w-auto px-6 rounded-2xl font-black text-[10px] uppercase tracking-widest border-2 border-primary/20 bg-background/50 hover:bg-primary/5 hover:border-primary/40 transition-all gap-2"
-                      asChild
-                    >
-                      <Label htmlFor="xml-upload-empty-state" className="cursor-pointer flex items-center justify-center h-full w-full">
-                        {importando ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        ) : (
-                          <Upload className="h-4 w-4 mr-2" />
-                        )}
-                        Importar XML
-                      </Label>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* TABS */}
-        <Tabs
-          value={activeTab}
-          onValueChange={handleTabChange}
-          className="space-y-6"
-        >
-          <TabsList className="grid w-full grid-cols-5 h-12 bg-muted/30 p-1 rounded-xl">
-            <TabsTrigger
-              value="dados"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
-            >
-              Dados
-            </TabsTrigger>
-            <TabsTrigger
-              value="checklist"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
-            >
-              Checklist IR
-            </TabsTrigger>
-            <TabsTrigger
-              value="documentos"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
-            >
-              Documentos
-            </TabsTrigger>
-            <TabsTrigger
-              value="bens"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
-            >
-              Bens
-            </TabsTrigger>
-            <TabsTrigger
-              value="agendamentos"
-              className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
-            >
-              Agendamentos
-            </TabsTrigger>
-          </TabsList>
-
-      
-          <TabsContent value="dados">
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="border-none shadow-sm">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg font-bold">
-                      Identificação
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-1">
-                  {savingField && (
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 pb-1">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Salvando...
-                    </p>
-                  )}
-                  <Field
-                    label="Nome Completo"
-                    value={contribuinte.nome}
-                    highlighted={highlightedField === "identificacao.nome_completo"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("identificacao.nome_completo", v)}
-                  />
-                  <Field
-                    label="Natureza Ocupação"
-                    value={contribuinte.naturezaOcupacao}
-                    highlighted={highlightedField === "identificacao.natureza_ocupacao"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("identificacao.natureza_ocupacao", v)}
-                  />
-                  <Field
-                    label="Ocupação Principal"
-                    value={contribuinte.ocupacaoPrincipal}
-                    highlighted={highlightedField === "identificacao.ocupacao_principal"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("identificacao.ocupacao_principal", v)}
-                  />
-                  <Field
-                    label="CPF"
-                    value={formatCPF(contribuinte.cpf)}
-                    highlighted={highlightedField === "identificacao.cpf"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("identificacao.cpf", v)}
-                  />
-                  <Field
-                    label="Data Nascimento"
-                    value={formatDate(contribuinte.dataNascimento)}
-                    highlighted={highlightedField === "identificacao.data_nascimento"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("identificacao.data_nascimento", v)}
-                  />
-                  <Field
-                    label="Título de Eleitor"
-                    value={contribuinte.tituloEleitor}
-                    highlighted={highlightedField === "identificacao.titulo_eleitor"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("identificacao.titulo_eleitor", v)}
-                  />
-                </CardContent>
-              </Card>
-
-              <Card className="border-none shadow-sm">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg font-bold">
-                      Localização & Contato
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-1">
-                  <Field
-                    label="CEP"
-                    value={formatCEP(contribuinte.enderecoCep)}
-                    highlighted={highlightedField === "endereco.cep"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("endereco.cep", v)}
-                  />
-                  <Field
-                    label="Endereço"
-                    value={contribuinte.enderecoLogradouro}
-                    highlighted={highlightedField === "endereco.logradouro"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("endereco.logradouro", v)}
-                  />
-                  <Field
-                    label="Complemento"
-                    value={contribuinte.enderecoComplemento}
-                    highlighted={highlightedField === "endereco.complemento"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("endereco.complemento", v)}
-                  />
-                  <Field
-                    label="Cidade/UF"
-                    value={`${contribuinte.enderecoMunicipio || ""} - ${contribuinte.enderecoUf || ""}`}
-                    highlighted={highlightedField === "endereco"}
-                  />
-                  <Field
-                    label="Email"
-                    value={contribuinte.email}
-                    highlighted={highlightedField === "contato.email"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("contato.email", v)}
-                  />
-                  <Field
-                    label="Telefone/Celular"
-                    value={contribuinte.telefone}
-                    highlighted={highlightedField === "contato.celular"}
-                    editable={!!declaracaoId}
-                    onSave={(v) => handleFieldUpdate("contato.celular", v)}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-
-          <TabsContent value="checklist">
-            <div className="grid gap-6 lg:grid-cols-5">
-           
-
-              <div className="lg:col-span-2 space-y-8">
-                {["Dados Pessoais", "Documentos", "Financeiro", "Patrimônio"].map(
-                  (category) => {
-                    const items = cadastroItems.filter(
-                      (i) => i.category === category
-                    )
-                    if (items.length === 0) return null
-
-                    return (
-                      <div
-                        key={category}
-                        className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500"
-                      >
-                        <div className="flex items-center justify-between px-2">
-                          <div className="flex items-center gap-2">
-                            <div className="h-4 w-1 rounded-full bg-primary" />
-                            <h4 className="text-xs font-black uppercase tracking-widest text-foreground">
-                              {category}
-                            </h4>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] font-bold border-muted-foreground/10"
-                          >
-                            {
-                              items.filter(
-                                (i) => i.ok || manualChecks[i.fieldId]
-                              ).length
-                            }{" "}
-                            / {items.length} COMPLETO
-                          </Badge>
-                        </div>
-
-                        <div className="bg-background rounded-3xl border border-muted-foreground/10 overflow-hidden shadow-sm">
-                          {items.map((item, idx) => {
-                            const isDone = item.ok || manualChecks[item.fieldId]
-                            return (
-                              <div
-                                key={idx}
-                                className={cn(
-                                  "p-4 flex items-center justify-between gap-4 transition-all border-b last:border-b-0 hover:bg-muted/5",
-                                  isDone && "bg-emerald-50/10"
-                                )}
-                              >
-                                <div className="flex items-center gap-4 flex-1">
-                                  <div className="flex items-center justify-center min-w-[24px]">
-                                    <Checkbox
-                                      id={`check-${item.fieldId}`}
-                                      checked={isDone}
-                                      onCheckedChange={() =>
-                                        toggleManualCheck(item.fieldId)
-                                      }
-                                      className="h-5 w-5 rounded-md data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                                    />
-                                  </div>
-                                  <div className="space-y-0.5">
-                                    <Label
-                                      htmlFor={`check-${item.fieldId}`}
-                                      className={cn(
-                                        "text-sm font-bold cursor-pointer transition-all",
-                                        isDone
-                                          ? "text-muted-foreground line-through opacity-50"
-                                          : "text-foreground"
-                                      )}
-                                    >
-                                      {item.label}
-                                      {item.ok && (
-                                        <CheckCircle2 className="inline ml-2 h-3 w-3 text-emerald-500" />
-                                      )}
-                                    </Label>
-                                    <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
-                                      {item.ok
-                                        ? `Valor: ${item.value}`
-                                        : "Pendente de validação no sistema"}
-                                    </p>
-                                    {getDocsForItem(item.fieldId).length > 0 && (
-                                      <div className="mt-2 flex flex-wrap gap-2 animate-in fade-in-50 duration-300">
-                                        {getDocsForItem(item.fieldId).map((doc, dIdx) => (
-                                          <button
-                                            key={dIdx}
-                                            type="button"
-                                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/5 hover:bg-primary/10 border border-primary/10 hover:border-primary/20 text-[10px] font-bold text-primary transition-all group/doc"
-                                            onClick={() => {
-                                              if (!doc.url) {
-                                                toast.error("URL do arquivo não disponível.")
-                                                return
-                                              }
-                                              setViewerDoc(doc)
-                                              setViewerOpen(true)
-                                            }}
-                                          >
-                                            <FileText className="h-3.5 w-3.5 text-primary/80" />
-                                            <span className="max-w-[150px] truncate">{doc.nome_arquivo}</span>
-                                            <span className="text-[8px] text-muted-foreground opacity-85">
-                                              ({(doc.tamanho_bytes / 1024).toFixed(1)} KB)
-                                            </span>
-                                            <ExternalLink className="h-3 w-3 opacity-60 group-hover/doc:opacity-100 group-hover/doc:translate-x-0.5 transition-all" />
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
-
-                                  </div>
-                                </div>
-
-                                {(!item.ok || manualChecks[item.fieldId]) && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className={cn(
-                                      "h-8 pr-2 pl-4 rounded-xl text-[10px] font-black tracking-widest text-primary hover:bg-primary/10 transition-all group shrink-0",
-                                      manualChecks[item.fieldId] && "text-emerald-600"
-                                    )}
-                                    onClick={() => {
-                                      if (manualChecks[item.fieldId]) {
-                                        // Reabrir edição quando for concluído manualmente (opção B)
-                                        if (item.type === "doc") {
-                                          setTag(item.fieldId)
-                                          handleTabChange("documentos")
-                                          toast.info(`Editar documento manual: ${item.label}`)
-                                        } else {
-                                          handleTabChange("dados")
-                                          setHighlightedField(item.fieldId)
-                                          toast.info(`Reabrir campo manual na aba Dados: ${item.label}`)
-                                        }
-                                        return
-                                      }
-
-                                      if (item.type === "doc") {
-                                        setTag(item.fieldId)
-                                        handleTabChange("documentos")
-                                        toast.info(`Local de upload para: ${item.label}`)
-                                      } else {
-                                        handleTabChange("dados")
-                                        setHighlightedField(item.fieldId)
-                                        toast.info(`Campo destacado na aba Dados: ${item.label}`)
-                                      }
-                                    }}
-                                  >
-                                    {manualChecks[item.fieldId]
-                                      ? "Atualizado manualmente"
-                                      : item.type === "doc"
-                                        ? "ANEXAR"
-                                        : "PREENCHER"}
-                                    <ArrowRight className="ml-2 h-3 w-3 group-hover:translate-x-1 transition-transform" />
-                                  </Button>
-                                )}
-
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  }
-                )}
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* TAB: DOCUMENTOS */}
-          <TabsContent value="documentos">
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="border-none shadow-sm h-full flex flex-col">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <FileUp className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg font-bold">
-                      Fontes Externas
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4 flex-1 flex flex-col justify-center">
-                  <div className="p-8 rounded-2xl border-2 border-dashed border-primary/20 bg-primary/5 group cursor-pointer hover:bg-primary/10 transition-all text-center">
-                    <input
-                      type="file"
-                      accept=".xml"
-                      className="hidden"
-                      id="xml-upload-main"
-                      onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)}
-                    />
-                    <Label htmlFor="xml-upload-main" className="cursor-pointer block">
-                      <FileUp className="h-10 w-10 text-primary mx-auto mb-3 opacity-50 group-hover:opacity-100 group-hover:scale-110 transition-all" />
-                      <p className="text-sm font-black text-foreground">
-                        Importar Declaração Anterior (XML)
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-2 max-w-xs mx-auto">
-                        Sincroniza automaticamente bens, dívidas e dados cadastrais
-                        da receita federal.
-                      </p>
-                    </Label>
-                  </div>
-                  <Button
-                    className="w-full h-12 rounded-xl font-bold transition-all"
-                    variant={xmlFile ? "default" : "outline"}
-                    onClick={() => handleImportarXml()}
-                    disabled={importando || !xmlFile}
-                  >
-                    {importando ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Package className="h-4 w-4 mr-2" />
-                    )}
-                    {xmlFile ? `IMPORTAR "${xmlFile.name}"` : "SELECIONE UM ARQUIVO XML"}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="border-none shadow-sm h-full flex flex-col">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Upload className="h-4 w-4 text-primary" />
-                    <CardTitle className="text-lg font-bold">
-                      Repositório de Documentos
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
-                      Tipo de Documento
-                    </Label>
-                    <Select value={tag} onValueChange={setTag}>
-                      <SelectTrigger className="h-12 rounded-xl focus:ring-primary bg-muted/20 border-none">
-                        <SelectValue placeholder="Selecione a categoria..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TAGS.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {tag === "Outros" && (
-                    <Input
-                      placeholder="Especifique o nome do documento..."
-                      className="h-12 rounded-xl border-primary/20 focus:ring-primary shadow-sm animate-in fade-in slide-in-from-top-2"
-                      value={customTag}
-                      onChange={(e) => setCustomTag(e.target.value)}
-                    />
-                  )}
-
-                  <div className="relative group space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
-                      Arquivo
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        className="h-12 pt-3 rounded-xl border-dashed border-2 opacity-0 absolute inset-0 z-10 cursor-pointer"
-                        onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                      />
-                      <div className="h-12 rounded-xl border-2 border-dashed flex items-center justify-center bg-muted/10 group-hover:bg-muted/20 transition-all border-muted-foreground/20">
-                        <p className="text-sm font-bold text-muted-foreground">
-                          {docFile ? docFile.name : "Arraste PDF ou Imagem aqui"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button
-                    className="w-full h-12 rounded-xl font-black shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all"
-                    disabled={
-                      docLoading ||
-                      !docFile ||
-                      !tag ||
-                      (tag === "Outros" && !customTag)
-                    }
-                    onClick={handleDocumento}
-                  >
-                    {docLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-2" />
-                    )}
-                    EFETUAR UPLOAD AGORA
-                  </Button>
-
-                  {extractionResult && (
-                    <ExtractionResultBadge
-                      confianca={extractionResult.confianca}
-                      origem={
-                        extractionResult.confianca >= 0.5
-                          ? "anchor_parser"
-                          : "claude_ocr"
-                      }
-                      camposAtualizados={
-                        extractionResult.campos_simples_atualizados +
-                        extractionResult.bens_criados +
-                        extractionResult.rendimentos_pj_criados +
-                        extractionResult.meses_pf_criados
-                      }
-                      alertas={extractionResult.alertas_revisao}
-                    />
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* TAB: BENS */}
-          <TabsContent value="bens">
-            <Card className="border-none shadow-sm overflow-hidden">
-              <CardHeader className="bg-muted/5 border-b py-6">
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          {/* HEADER */}
+          <div className="flex flex-col gap-4">
+            <Card className="border-none shadow-sm bg-background/60 backdrop-blur-md border border-white/20">
+              <CardHeader className="p-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
-                      <Building2 className="h-6 w-6" />
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                      <User className="h-7 w-7" />
                     </div>
                     <div>
-                      <CardTitle className="text-xl font-black tracking-tight">
-                        Relação de Bens e Direitos
-                      </CardTitle>
-                      <CardDescription className="text-xs font-bold text-primary flex items-center gap-1.5 mt-0.5">
-                        <span className="flex h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                        {filteredAssets.length} registros auditados no sistema
-                      </CardDescription>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-2xl font-black tracking-tight text-foreground">
+                          {contribuinte.nome}
+                        </h2>
+                        <Badge
+                          className={cn(
+                            statusClasses,
+                            "rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-wider"
+                          )}
+                        >
+                          {statusLabel}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground/70">
+                          <FileText className="h-3 w-3" />
+                          {formatCPF(contribuinte.cpf)}
+                        </div>
+                        <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
+                        <Badge
+                          variant="outline"
+                          className="h-5 text-[10px] font-bold border-muted-foreground/20"
+                        >
+                          EXERCÍCIO {anoExercicio}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <Button
-                      size="sm"
-                      className="h-11 rounded-xl font-black text-[10px] uppercase tracking-widest px-6 shadow-lg shadow-primary/20"
-                      onClick={openNewBemDialog}
-                      disabled={!declaracaoId}
-                    >
-                      <Package className="mr-2 h-4 w-4" />
-                      Novo Bem
-                    </Button>
-                    <div className="relative w-[320px]">
-                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-                      <Input
-                        placeholder="Pesquisar por descrição..."
-                        className="pl-10 h-11 rounded-xl bg-background border-muted-foreground/10 focus:ring-primary shadow-sm"
-                        value={assetSearch}
-                        onChange={(e) => setAssetSearch(e.target.value)}
-                      />
-                    </div>
-                    <Select
-                      value={assetGroupFilter}
-                      onValueChange={setAssetGroupFilter}
-                    >
-                      <SelectTrigger className="w-[200px] h-11 rounded-xl bg-background border-muted-foreground/10 shadow-sm">
-                        <SelectValue placeholder="Todos Grupos" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="all" className="font-bold">
-                          Todos os Grupos
-                        </SelectItem>
-                        {Object.entries(GRUPOS_BENS).map(([id, label]) => (
-                          <SelectItem key={id} value={id} className="text-xs font-semibold">
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-xl font-bold border-muted-foreground/20 hover:bg-primary/5 transition-all group"
+                        >
+                          {exportando ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <FileDown className="mr-2 h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
+                          )}
+                          EXPORTAR
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-56 rounded-xl border-white/20 bg-background/80 backdrop-blur-md"
+                      >
+                        <DropdownMenuItem
+                          onClick={() => handleExportar("posicional")}
+                          className="cursor-pointer font-bold gap-2"
+                        >
+                          <FileText className="h-4 w-4 text-primary" />
+                          Arquivo .DEC (Layout RFB)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleExportar("xml")}
+                          className="cursor-pointer font-bold gap-2 text-xs"
+                        >
+                          <FileCode className="h-3.5 w-3.5 text-primary" />
+                          XML Bruto
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={handleExportarPdf}
+                          className="cursor-pointer font-bold gap-2 text-xs text-emerald-600"
+                        >
+                          <FileDown className="h-3.5 w-3.5" />
+                          Dossiê PDF Completo
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </CardHeader>
+            </Card>
+          </div>
 
-              <CardContent className="p-0">
-                {!assets || assets.length === 0 ? (
-                  <div className="p-20 text-center flex flex-col items-center">
-                    <div className="h-20 w-20 rounded-full bg-muted/30 flex items-center justify-center mb-6">
-                      <Package className="h-10 w-10 text-muted-foreground/20" />
+          {/* KPI CARDS / EMPTY BANNER */}
+          {declaration ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                title="Rendimentos"
+                value={formatCurrency(declaration.totalRendPJ)}
+                icon={<Landmark className="h-5 w-5" />}
+              />
+              <StatCard
+                title="IRRF"
+                value={formatCurrency(declaration.totalIRRF)}
+                icon={<Calculator className="h-5 w-5" />}
+              />
+              <StatCard
+                title="Patrimônio"
+                value={formatCurrency(declaration.totalBensAtual)}
+                icon={<Building2 className="h-5 w-5" />}
+              />
+              <StatCard
+                title="Variação"
+                value={`${variation >= 0 ? "+" : ""}${formatPercent(variationPercent)}`}
+                icon={
+                  variation >= 0 ? (
+                    <TrendingUp className="h-5 w-5 text-emerald-600" />
+                  ) : (
+                    <TrendingDown className="h-5 w-5 text-red-500" />
+                  )
+                }
+              />
+            </div>
+          ) : (
+            <Card className="border-none shadow-xl overflow-hidden bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-yellow-500/10 border border-amber-500/20 rounded-[2.5rem]">
+              <CardContent className="p-8">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="space-y-3 max-w-2xl text-center md:text-left">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-black uppercase tracking-widest">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Declaração Não Iniciada
                     </div>
-                    <h3 className="text-lg font-black text-foreground/40">
-                      Nenhum bem declarado
+                    <h3 className="text-2xl font-black tracking-tight text-foreground">
+                      Este contribuinte não possui nenhuma declaração ativa para o exercício atual.
                     </h3>
-                    <p className="text-sm text-muted-foreground/60 mt-2 max-w-xs">
-                      {!declaracaoId
-                        ? "Por favor, inicialize a declaração do contribuinte no topo da página para lançar bens manualmente."
-                        : "Os bens aparecerão aqui após a importação do XML ou lançamento manual."}
+                    <p className="text-sm font-bold text-muted-foreground leading-relaxed font-sans">
+                      Você pode iniciar o preenchimento manual agora mesmo escolhendo o ano do exercício, ou fazer o upload do arquivo XML anterior para importar e preencher automaticamente todos os bens e dados cadastrais.
                     </p>
                   </div>
-                ) : filteredAssets.length > 50 ? (
-                  <div className="h-[700px] w-full">
-                    <Virtuoso
-                      data={filteredAssets}
-                      itemContent={(index, asset) => (
-                        <div className="p-6 border-b last:border-b-0 hover:bg-primary/[0.02] transition-all bg-background group cursor-default">
-                          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="max-w-2xl">
-                              <div className="mb-2 flex gap-2">
-                                <Badge className="bg-primary/5 text-primary border-primary/20 text-[9px] font-black tracking-[0.1em] rounded-lg px-2 py-0.5">
-                                  GRUPO {asset.grupo}
-                                </Badge>
-                                <Badge
-                                  variant="outline"
-                                  className="text-[9px] font-black border-muted-foreground/10 rounded-lg px-2 py-0.5 opacity-60"
-                                >
-                                  COD {asset.codigo}
-                                </Badge>
-                              </div>
-                              <h4 className="font-bold text-[13px] tracking-tight leading-relaxed group-hover:text-primary transition-colors pr-8">
-                                {asset.descricao}
+
+                  <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto shrink-0">
+                    <div className="flex items-center gap-2 bg-background/85 backdrop-blur-sm p-1.5 rounded-2xl border shadow-sm w-full sm:w-auto">
+                      <Select value={selectedManualYear} onValueChange={setSelectedManualYear}>
+                        <SelectTrigger className="w-[100px] h-10 border-none bg-transparent font-black text-xs shadow-none focus:ring-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="2026" className="font-black text-xs">2026</SelectItem>
+                          <SelectItem value="2025" className="font-black text-xs">2025</SelectItem>
+                          <SelectItem value="2024" className="font-black text-xs">2024</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        className="h-10 px-5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md shadow-primary/10"
+                        onClick={handleCreateManualDeclaration}
+                        disabled={creatingManual}
+                      >
+                        {creatingManual ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          "Iniciar Manual"
+                        )}
+                      </Button>
+                    </div>
+
+                    <span className="text-xs font-black text-muted-foreground/60 uppercase">OU</span>
+
+                    <div className="relative w-full sm:w-auto">
+                      <input
+                        type="file"
+                        accept=".xml"
+                        className="hidden"
+                        id="xml-upload-empty-state"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            await handleImportarXml(file)
+                          }
+                        }}
+                        disabled={importando}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-10 w-full sm:w-auto px-6 rounded-2xl font-black text-[10px] uppercase tracking-widest border-2 border-primary/20 bg-background/50 hover:bg-primary/5 hover:border-primary/40 transition-all gap-2"
+                        asChild
+                      >
+                        <Label htmlFor="xml-upload-empty-state" className="cursor-pointer flex items-center justify-center h-full w-full">
+                          {importando ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : (
+                            <Upload className="h-4 w-4 mr-2" />
+                          )}
+                          Importar XML
+                        </Label>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TABS */}
+          <Tabs
+            value={activeTab}
+            onValueChange={handleTabChange}
+            className="space-y-6"
+          >
+            <TabsList className="grid w-full grid-cols-5 h-12 bg-muted/30 p-1 rounded-xl">
+              <TabsTrigger
+                value="dados"
+                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
+              >
+                Dados
+              </TabsTrigger>
+              <TabsTrigger
+                value="checklist"
+                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
+              >
+                Checklist IR
+              </TabsTrigger>
+              <TabsTrigger
+                value="documentos"
+                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
+              >
+                Documentos
+              </TabsTrigger>
+              <TabsTrigger
+                value="bens"
+                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
+              >
+                Bens
+              </TabsTrigger>
+              <TabsTrigger
+                value="agendamentos"
+                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold text-xs"
+              >
+                Agendamentos
+              </TabsTrigger>
+            </TabsList>
+
+            {/* TAB: DADOS */}
+            <TabsContent value="dados">
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card className="border-none shadow-sm">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-lg font-bold">
+                        Identificação
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-1">
+                    {savingField && (
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 pb-1">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Salvando...
+                      </p>
+                    )}
+                    <Field
+                      label="Nome Completo"
+                      value={contribuinte.nome}
+                      highlighted={highlightedField === "identificacao.nome_completo"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("identificacao.nome_completo", v)}
+                    />
+                    <Field
+                      label="Natureza Ocupação"
+                      value={contribuinte.naturezaOcupacao}
+                      highlighted={highlightedField === "identificacao.natureza_ocupacao"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("identificacao.natureza_ocupacao", v)}
+                    />
+                    <Field
+                      label="Ocupação Principal"
+                      value={contribuinte.ocupacaoPrincipal}
+                      highlighted={highlightedField === "identificacao.ocupacao_principal"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("identificacao.ocupacao_principal", v)}
+                    />
+                    <Field
+                      label="CPF"
+                      value={formatCPF(contribuinte.cpf)}
+                      highlighted={highlightedField === "identificacao.cpf"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("identificacao.cpf", v)}
+                    />
+                    <Field
+                      label="Data Nascimento"
+                      value={formatDate(contribuinte.dataNascimento)}
+                      highlighted={highlightedField === "identificacao.data_nascimento"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("identificacao.data_nascimento", v)}
+                    />
+                    <Field
+                      label="Título de Eleitor"
+                      value={contribuinte.tituloEleitor}
+                      highlighted={highlightedField === "identificacao.titulo_eleitor"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("identificacao.titulo_eleitor", v)}
+                    />
+                  </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-sm">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-lg font-bold">
+                        Localização & Contato
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-1">
+                    <Field
+                      label="CEP"
+                      value={formatCEP(contribuinte.enderecoCep)}
+                      highlighted={highlightedField === "endereco.cep"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("endereco.cep", v)}
+                    />
+                    <Field
+                      label="Endereço"
+                      value={contribuinte.enderecoLogradouro}
+                      highlighted={highlightedField === "endereco.logradouro"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("endereco.logradouro", v)}
+                    />
+                    <Field
+                      label="Complemento"
+                      value={contribuinte.enderecoComplemento}
+                      highlighted={highlightedField === "endereco.complemento"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("endereco.complemento", v)}
+                    />
+                    <Field
+                      label="Cidade/UF"
+                      value={`${contribuinte.enderecoMunicipio || ""} - ${contribuinte.enderecoUf || ""}`}
+                      highlighted={highlightedField === "endereco"}
+                    />
+                    <Field
+                      label="Email"
+                      value={contribuinte.email}
+                      highlighted={highlightedField === "contato.email"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("contato.email", v)}
+                    />
+                    <Field
+                      label="Telefone/Celular"
+                      value={contribuinte.telefone}
+                      highlighted={highlightedField === "contato.celular"}
+                      editable={!!declaracaoId}
+                      onSave={(v) => handleFieldUpdate("contato.celular", v)}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* TAB: CHECKLIST */}
+            <TabsContent value="checklist">
+              <div className="grid gap-6 lg:grid-cols-12">
+                {/* LEFT: checklist items */}
+                <div className="lg:col-span-4 xl:col-span-3 space-y-6 h-[calc(100vh-4.5rem)] overflow-y-auto pr-2 scrollbar-none pb-10">
+                  {["Dados Pessoais", "Documentos", "Financeiro", "Patrimônio"].map(
+                    (category) => {
+                      const items = cadastroItems.filter(
+                        (i) => i.category === category
+                      )
+                      if (items.length === 0) return null
+
+                      return (
+                        <div
+                          key={category}
+                          className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500"
+                        >
+                          <div className="flex items-center justify-between px-3 py-2 sticky top-0 z-10 bg-slate-50/95 backdrop-blur-sm rounded-t-2xl border-x border-t border-muted-foreground/10 shadow-sm">
+                            <div className="flex items-center gap-2">
+                              <div className="h-4 w-1.5 rounded-full bg-primary" />
+                              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
+                                {category}
                               </h4>
                             </div>
-                            <div className="flex gap-12 shrink-0 bg-muted/20 p-4 rounded-2xl group-hover:bg-primary/5 transition-colors">
-                              <div className="text-right">
-                                <p className="text-[10px] uppercase font-black text-muted-foreground tracking-[0.15em] mb-1.5 opacity-60">
-                                  Posição 2023
-                                </p>
-                                <p className="font-bold text-sm text-foreground/80 tracking-tight">
-                                  {formatCurrency(asset.valorAnterior)}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[10px] uppercase font-black text-primary tracking-[0.15em] mb-1.5">
-                                  Posição 2024
-                                </p>
-                                <p className="font-black text-base text-primary tracking-tight">
-                                  {formatCurrency(asset.valorAtual)}
-                                </p>
+                            <div className="flex flex-col items-end gap-1.5">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] font-bold border-muted-foreground/10 bg-white/50"
+                              >
+                                {
+                                  items.filter(
+                                    (i) => i.ok || manualChecks[i.fieldId] || getDocsForItem(i.fieldId).length > 0
+                                  ).length
+                                }{" "}
+                                / {items.length}
+                              </Badge>
+                              <div className="w-24 h-1 bg-muted-foreground/10 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-primary transition-all duration-1000"
+                                  style={{
+                                    width: `${(items.filter(i => i.ok || manualChecks[i.fieldId] || getDocsForItem(i.fieldId).length > 0).length / items.length) * 100}%`,
+                                  }}
+                                />
                               </div>
                             </div>
+                          </div>
+
+                          <div className="bg-background rounded-b-3xl border border-muted-foreground/10 overflow-hidden shadow-sm">
+                            {items.map((item, idx) => {
+                              const hasDocs = getDocsForItem(item.fieldId).length > 0
+                              const isDone = item.ok || manualChecks[item.fieldId] || hasDocs
+                              return (
+                                <div
+                                  key={idx}
+                                  className={cn(
+                                    "p-4 flex items-start justify-between gap-4 transition-all border-b last:border-b-0 hover:bg-muted/5",
+                                    isDone && "bg-emerald-50/10"
+                                  )}
+                                >
+                                  {/* LEFT: checkbox + label + docs */}
+                                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                                    <div className="flex items-center justify-center min-w-[24px] pt-0.5">
+                                      <Checkbox
+                                        id={`check-${item.fieldId}`}
+                                        checked={isDone}
+                                        onCheckedChange={() => toggleManualCheck(item.fieldId)}
+                                        className="h-5 w-5 rounded-md data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                                      />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                      <Label
+                                        htmlFor={`check-${item.fieldId}`}
+                                        className={cn(
+                                          "text-sm font-bold cursor-pointer transition-all break-words leading-tight",
+                                          isDone
+                                            ? "text-muted-foreground line-through opacity-50"
+                                            : "text-foreground"
+                                        )}
+                                      >
+                                        {item.label}
+                                        {item.ok && (
+                                          <CheckCircle2 className="inline ml-2 h-3 w-3 text-emerald-500" />
+                                        )}
+                                        {!item.ok && hasDocs && (
+                                          <Badge variant="outline" className="ml-2 h-4 text-[8px] font-black uppercase border-emerald-200 text-emerald-600 bg-emerald-50/50">
+                                            Auditado
+                                          </Badge>
+                                        )}
+                                      </Label>
+                                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight line-clamp-1">
+                                        {item.ok
+                                          ? `Valor: ${item.value}`
+                                          : hasDocs
+                                            ? "Documento anexado para conferência"
+                                            : "Pendente de validação no sistema"}
+                                      </p>
+                                      {/* Botões de documento — dentro do bloco de texto */}
+                                      {getDocsForItem(item.fieldId).length > 0 && (
+                                        <div className="mt-3 flex flex-wrap gap-2 animate-in fade-in-50 duration-500">
+                                          {getDocsForItem(item.fieldId).map((doc, dIdx) => (
+                                            <Button
+                                              key={dIdx}
+                                              variant="secondary"
+                                              size="sm"
+                                              className="h-8 group/doc bg-primary/10 hover:bg-primary text-primary hover:text-white border-none rounded-xl transition-all gap-2 px-4 shadow-sm"
+                                              onClick={() => {
+                                                if (!doc.url) {
+                                                  toast.error("URL do arquivo não disponível.")
+                                                  return
+                                                }
+                                                setViewerDoc(doc)
+                                              }}
+                                            >
+                                              <FileText className="h-3.5 w-3.5" />
+                                              <span className="text-[10px] font-black uppercase tracking-widest max-w-[120px] truncate">
+                                                Ver {doc.tag || "Documento"}
+                                              </span>
+                                              <Maximize2 className="h-3 w-3 opacity-0 group-hover/doc:opacity-100 transition-all scale-0 group-hover/doc:scale-100" />
+                                            </Button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* RIGHT: action button */}
+                                  <div className="flex flex-col items-end gap-2 shrink-0 self-start mt-1">
+                                    {(!item.ok || manualChecks[item.fieldId]) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className={cn(
+                                          "h-7 pr-1 pl-3 rounded-lg text-[9px] font-black tracking-widest text-primary hover:bg-primary/10 transition-all group",
+                                          manualChecks[item.fieldId] && "text-emerald-600 bg-emerald-50/50"
+                                        )}
+                                        onClick={() => {
+                                          if (item.type === "doc") {
+                                            setTag(item.fieldId)
+                                            handleTabChange("documentos")
+                                          } else {
+                                            handleTabChange("dados")
+                                            setHighlightedField(item.fieldId)
+                                          }
+                                        }}
+                                      >
+                                        {manualChecks[item.fieldId]
+                                          ? "CONFERIDO"
+                                          : item.type === "doc"
+                                            ? "ANEXAR"
+                                            : "PREENCHER"}
+                                        <ArrowRight className="ml-1.5 h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    }
+                  )}
+                </div>
+
+                {/* RIGHT: document viewer */}
+                <div className={cn(
+                  "lg:col-span-8 xl:col-span-9 sticky top-4 h-[calc(100vh-4rem)] pb-4 transition-all duration-500",
+                  isViewerMaximized && "fixed inset-0 z-[100] h-screen w-screen p-0 m-0 bg-background/80 backdrop-blur-2xl"
+                )}>
+                  <Card className={cn(
+                    "border-none shadow-sm overflow-hidden h-full flex flex-col bg-white/50 backdrop-blur-sm transition-all",
+                    isViewerMaximized && "rounded-none bg-background shadow-2xl"
+                  )}>
+                    <CardHeader className="px-6 py-3 border-b bg-muted/10">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-sm font-black tracking-tight flex items-center gap-2">
+                              Visualizador
+                              {viewerDoc?.confianca_extracao !== undefined && (
+                                <Badge
+                                  className={cn(
+                                    "h-4 text-[8px] font-black px-1.5 border-none",
+                                    viewerDoc.confianca_extracao >= 0.8
+                                      ? "bg-emerald-500/10 text-emerald-600"
+                                      : viewerDoc.confianca_extracao >= 0.5
+                                        ? "bg-amber-500/10 text-amber-600"
+                                        : "bg-red-500/10 text-red-600"
+                                  )}
+                                >
+                                  IA {Math.round(viewerDoc.confianca_extracao * 100)}%
+                                </Badge>
+                              )}
+                            </CardTitle>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <CardDescription className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 truncate max-w-[150px]">
+                                {viewerDoc?.nome_arquivo || "Selecione"}
+                              </CardDescription>
+                              {viewerDoc && (
+                                <div className="flex items-center gap-2 border-l pl-2 border-muted-foreground/10">
+                                  <span className="text-[7px] font-black text-muted-foreground/40 uppercase tracking-tighter truncate max-w-[100px]">
+                                    {viewerDoc.origem} •{" "}
+                                    {viewerDoc.recebido_em
+                                      ? formatDate(viewerDoc.recebido_em)
+                                      : "--"}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {viewerDoc && (
+                            <div className="flex items-center gap-1 mr-4 border-r pr-4 border-muted-foreground/10 bg-muted/5 p-1 rounded-lg">
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-md text-muted-foreground hover:text-primary">
+                                <ZoomOut className="h-3.5 w-3.5" />
+                              </Button>
+                              <span className="text-[10px] font-black text-muted-foreground px-1 min-w-[32px] text-center tracking-tighter">100%</span>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-md text-muted-foreground hover:text-primary">
+                                <ZoomIn className="h-3.5 w-3.5" />
+                              </Button>
+                              <div className="w-px h-3 bg-muted-foreground/20 mx-1" />
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-md text-muted-foreground hover:text-primary">
+                                <RotateCw className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
+                          {viewerDoc && (
+                            <>
+                              {viewerDoc.tag && !manualChecks[viewerDoc.tag] && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 border-emerald-500/30 text-emerald-600 hover:bg-emerald-50 font-black text-[10px] gap-2 rounded-lg px-3 shadow-sm mr-2"
+                                  onClick={() => {
+                                    toggleManualCheck(viewerDoc.tag)
+                                    toast.success("Documento validado com sucesso!")
+                                  }}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  VALIDAR
+                                </Button>
+                              )}
+                              {viewerDoc.url && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 rounded-lg hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all"
+                                  onClick={() => window.open(viewerDoc.url!, "_blank")}
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn(
+                                  "h-8 w-8 p-0 rounded-lg hover:bg-primary/5 transition-all text-muted-foreground",
+                                  isViewerMaximized && "bg-primary/10 text-primary"
+                                )}
+                                onClick={() => setIsViewerMaximized(!isViewerMaximized)}
+                              >
+                                {isViewerMaximized ? <X className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-auto px-2 rounded-lg hover:bg-red-50 hover:text-red-600 transition-all text-muted-foreground gap-2"
+                                onClick={() => {
+                                  setViewerDoc(null)
+                                  setIsViewerMaximized(false)
+                                }}
+                              >
+                                <span className="text-[10px] font-black uppercase tracking-widest">Fechar</span>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="p-0 flex-1 overflow-hidden relative group">
+                      {viewerDoc ? (
+                        <div className="h-full bg-white relative">
+                          {!viewerDoc.url ? (
+                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-sm font-bold p-6 text-center">
+                              <AlertCircle className="h-10 w-10 mb-2 opacity-20" />
+                              URL do arquivo indisponível.
+                            </div>
+                          ) : viewerDoc.media_type?.includes("pdf") ? (
+                            <iframe
+                              title="viewer-pdf"
+                              src={viewerDoc.url}
+                              className="w-full h-full border-none bg-white"
+                            />
+                          ) : (
+                            <img
+                              src={viewerDoc.url}
+                              alt={viewerDoc.nome_arquivo}
+                              className="w-full h-full object-contain bg-white"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-12 text-center">
+                          <div className="relative mb-6">
+                            <div className="absolute inset-0 animate-ping rounded-full bg-primary/5 scale-150 opacity-10" />
+                            <div className="relative h-20 w-20 rounded-[2rem] bg-muted/30 flex items-center justify-center border border-dashed border-muted-foreground/10">
+                              <FolderOpen className="h-10 w-10 text-muted-foreground/20" />
+                            </div>
+                          </div>
+                          <h3 className="text-lg font-black text-foreground/40 tracking-tight">
+                            Aguardando Documento
+                          </h3>
+                          <p className="text-xs font-medium text-muted-foreground/50 mt-2 max-w-[200px] leading-relaxed">
+                            Selecione um anexo no checklist para visualizar os detalhes aqui.
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* TAB: DOCUMENTOS */}
+            <TabsContent value="documentos">
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card className="border-none shadow-sm h-full flex flex-col">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <FileUp className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-lg font-bold">
+                        Fontes Externas
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4 flex-1 flex flex-col justify-center">
+                    <div className="p-8 rounded-2xl border-2 border-dashed border-primary/20 bg-primary/5 group cursor-pointer hover:bg-primary/10 transition-all text-center">
+                      <input
+                        type="file"
+                        accept=".xml"
+                        className="hidden"
+                        id="xml-upload-main"
+                        onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)}
+                      />
+                      <Label htmlFor="xml-upload-main" className="cursor-pointer block">
+                        <FileUp className="h-10 w-10 text-primary mx-auto mb-3 opacity-50 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+                        <p className="text-sm font-black text-foreground">
+                          Importar Declaração Anterior (XML)
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-2 max-w-xs mx-auto">
+                          Sincroniza automaticamente bens, dívidas e dados cadastrais
+                          da receita federal.
+                        </p>
+                      </Label>
+                    </div>
+                    <Button
+                      className="w-full h-12 rounded-xl font-bold transition-all"
+                      variant={xmlFile ? "default" : "outline"}
+                      onClick={() => handleImportarXml()}
+                      disabled={importando || !xmlFile}
+                    >
+                      {importando ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Package className="h-4 w-4 mr-2" />
+                      )}
+                      {xmlFile ? `IMPORTAR "${xmlFile.name}"` : "SELECIONE UM ARQUIVO XML"}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-sm h-full flex flex-col">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Upload className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-lg font-bold">
+                        Repositório de Documentos
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+                        Tipo de Documento
+                      </Label>
+                      <Select value={tag} onValueChange={setTag}>
+                        <SelectTrigger className="h-12 rounded-xl focus:ring-primary bg-muted/20 border-none">
+                          <SelectValue placeholder="Selecione a categoria..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TAGS.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {tag === "Outros" && (
+                      <Input
+                        placeholder="Especifique o nome do documento..."
+                        className="h-12 rounded-xl border-primary/20 focus:ring-primary shadow-sm animate-in fade-in slide-in-from-top-2"
+                        value={customTag}
+                        onChange={(e) => setCustomTag(e.target.value)}
+                      />
+                    )}
+
+                    <div className="relative group space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+                        Arquivo
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="h-12 pt-3 rounded-xl border-dashed border-2 opacity-0 absolute inset-0 z-10 cursor-pointer"
+                          onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                        />
+                        <div className="h-12 rounded-xl border-2 border-dashed flex items-center justify-center bg-muted/10 group-hover:bg-muted/20 transition-all border-muted-foreground/20">
+                          <p className="text-sm font-bold text-muted-foreground">
+                            {docFile ? docFile.name : "Arraste PDF ou Imagem aqui"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      className="w-full h-12 rounded-xl font-black shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all"
+                      disabled={
+                        docLoading ||
+                        !docFile ||
+                        !tag ||
+                        (tag === "Outros" && !customTag)
+                      }
+                      onClick={handleDocumento}
+                    >
+                      {docLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Upload className="h-4 w-4 mr-2" />
+                      )}
+                      EFETUAR UPLOAD AGORA
+                    </Button>
+
+                    {extractionResult && (
+                      <ExtractionResultBadge
+                        confianca={extractionResult.confianca}
+                        origem={
+                          extractionResult.confianca >= 0.5
+                            ? "anchor_parser"
+                            : "claude_ocr"
+                        }
+                        camposAtualizados={
+                          extractionResult.campos_simples_atualizados +
+                          extractionResult.bens_criados +
+                          extractionResult.rendimentos_pj_criados +
+                          extractionResult.meses_pf_criados
+                        }
+                        alertas={extractionResult.alertas_revisao}
+                      />
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* TAB: BENS */}
+            <TabsContent value="bens">
+              <Card className="border-none shadow-sm overflow-hidden">
+                <CardHeader className="bg-muted/5 border-b py-6">
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
+                        <Building2 className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-xl font-black tracking-tight">
+                          Relação de Bens e Direitos
+                        </CardTitle>
+                        <CardDescription className="text-xs font-bold text-primary flex items-center gap-1.5 mt-0.5">
+                          <span className="flex h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                          {filteredAssets.length} registros auditados no sistema
+                        </CardDescription>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Button
+                        size="sm"
+                        className="h-11 rounded-xl font-black text-[10px] uppercase tracking-widest px-6 shadow-lg shadow-primary/20"
+                        onClick={openNewBemDialog}
+                        disabled={!declaracaoId}
+                      >
+                        <Package className="mr-2 h-4 w-4" />
+                        Novo Bem
+                      </Button>
+                      <div className="relative w-[320px]">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+                        <Input
+                          placeholder="Pesquisar por descrição..."
+                          className="pl-10 h-11 rounded-xl bg-background border-muted-foreground/10 focus:ring-primary shadow-sm"
+                          value={assetSearch}
+                          onChange={(e) => setAssetSearch(e.target.value)}
+                        />
+                      </div>
+                      <Select
+                        value={assetGroupFilter}
+                        onValueChange={setAssetGroupFilter}
+                      >
+                        <SelectTrigger className="w-[200px] h-11 rounded-xl bg-background border-muted-foreground/10 shadow-sm">
+                          <SelectValue placeholder="Todos Grupos" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="all" className="font-bold">
+                            Todos os Grupos
+                          </SelectItem>
+                          {Object.entries(GRUPOS_BENS).map(([id, label]) => (
+                            <SelectItem key={id} value={id} className="text-xs font-semibold">
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-0">
+                  {!assets || assets.length === 0 ? (
+                    <div className="p-20 text-center flex flex-col items-center">
+                      <div className="h-20 w-20 rounded-full bg-muted/30 flex items-center justify-center mb-6">
+                        <Package className="h-10 w-10 text-muted-foreground/20" />
+                      </div>
+                      <h3 className="text-lg font-black text-foreground/40">
+                        Nenhum bem declarado
+                      </h3>
+                      <p className="text-sm text-muted-foreground/60 mt-2 max-w-xs">
+                        {!declaracaoId
+                          ? "Por favor, inicialize a declaração do contribuinte no topo da página para lançar bens manualmente."
+                          : "Os bens aparecerão aqui após a importação do XML ou lançamento manual."}
+                      </p>
+                    </div>
+                  ) : filteredAssets.length > 50 ? (
+                    <div className="h-[700px] w-full">
+                      <Virtuoso
+                        data={filteredAssets}
+                        itemContent={(index, asset) => (
+                          <div className="p-6 border-b last:border-b-0 hover:bg-primary/[0.02] transition-all bg-background group cursor-default">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                              <div className="max-w-2xl">
+                                <div className="mb-2 flex gap-2">
+                                  <Badge className="bg-primary/5 text-primary border-primary/20 text-[9px] font-black tracking-[0.1em] rounded-lg px-2 py-0.5">
+                                    GRUPO {asset.grupo}
+                                  </Badge>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] font-black border-muted-foreground/10 rounded-lg px-2 py-0.5 opacity-60"
+                                  >
+                                    COD {asset.codigo}
+                                  </Badge>
+                                </div>
+                                <h4 className="font-bold text-[13px] tracking-tight leading-relaxed group-hover:text-primary transition-colors pr-8">
+                                  {asset.descricao}
+                                </h4>
+                              </div>
+                              <div className="flex gap-12 shrink-0 bg-muted/20 p-4 rounded-2xl group-hover:bg-primary/5 transition-colors">
+                                <div className="text-right">
+                                  <p className="text-[10px] uppercase font-black text-muted-foreground tracking-[0.15em] mb-1.5 opacity-60">
+                                    Posição 2023
+                                  </p>
+                                  <p className="font-bold text-sm text-foreground/80 tracking-tight">
+                                    {formatCurrency(asset.valorAnterior)}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-[10px] uppercase font-black text-primary tracking-[0.15em] mb-1.5">
+                                    Posição 2024
+                                  </p>
+                                  <p className="font-black text-base text-primary tracking-tight">
+                                    {formatCurrency(asset.valorAtual)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      />
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-muted/50">
+                      {paginatedAssets.map((asset) => (
+                        <div
+                          key={asset.id}
+                          className="p-6 hover:bg-primary/[0.03] transition-all bg-background group flex items-center justify-between"
+                        >
+                          <div className="max-w-2xl">
+                            <div className="mb-2.5 flex gap-2">
+                              <Badge className="bg-muted text-muted-foreground text-[9px] font-black tracking-widest rounded-lg px-2 py-0.5">
+                                GRUPO {asset.grupo}
+                              </Badge>
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] font-black border-muted-foreground/10 rounded-lg px-2 py-0.5"
+                              >
+                                CÓDIGO {asset.codigo}
+                              </Badge>
+                            </div>
+                            <h4 className="font-bold text-sm leading-snug text-foreground/90">
+                              {asset.descricao}
+                            </h4>
+                          </div>
+                          <div className="flex gap-12 text-right">
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-50">
+                                Anterior
+                              </p>
+                              <p className="font-bold text-sm tracking-tight">
+                                {formatCurrency(asset.valorAnterior)}
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-black text-primary uppercase tracking-widest">
+                                Atual
+                              </p>
+                              <p className="font-black text-base text-primary tracking-tight">
+                                {formatCurrency(asset.valorAtual)}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 pl-6">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-lg hover:bg-primary/10 hover:text-primary transition-all"
+                                onClick={() => openEditBemDialog(asset)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all"
+                                onClick={() => handleDeleteBem(asset.id)}
+                                disabled={deletingBemId === asset.id}
+                              >
+                                {deletingBemId === asset.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {totalPages > 1 && (
+                        <div className="p-6 flex items-center justify-between bg-muted/10 border-t">
+                          <div className="flex items-center gap-3">
+                            <div className="h-2 w-2 rounded-full bg-primary" />
+                            <p className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">
+                              Exibindo {paginatedAssets.length} de{" "}
+                              {filteredAssets.length} registros
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-9 px-4 rounded-xl font-bold bg-background border-muted-foreground/20 hover:bg-primary/5"
+                              disabled={currentPage === 1}
+                              onClick={() => setCurrentPage((p) => p - 1)}
+                            >
+                              <ChevronLeft className="h-4 w-4 mr-2" /> ANTERIOR
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-9 px-4 rounded-xl font-bold bg-background border-muted-foreground/20 hover:bg-primary/5"
+                              disabled={currentPage === totalPages}
+                              onClick={() => setCurrentPage((p) => p + 1)}
+                            >
+                              PRÓXIMO <ChevronRight className="h-4 w-4 ml-2" />
+                            </Button>
                           </div>
                         </div>
                       )}
-                    />
-                  </div>
-                ) : (
-                  <div className="divide-y divide-muted/50">
-                    {paginatedAssets.map((asset) => (
-                      <div
-                        key={asset.id}
-                        className="p-6 hover:bg-primary/[0.03] transition-all bg-background group flex items-center justify-between"
-                      >
-                        <div className="max-w-2xl">
-                          <div className="mb-2.5 flex gap-2">
-                            <Badge className="bg-muted text-muted-foreground text-[9px] font-black tracking-widest rounded-lg px-2 py-0.5">
-                              GRUPO {asset.grupo}
-                            </Badge>
-                            <Badge
-                              variant="outline"
-                              className="text-[9px] font-black border-muted-foreground/10 rounded-lg px-2 py-0.5"
-                            >
-                              CÓDIGO {asset.codigo}
-                            </Badge>
-                          </div>
-                          <h4 className="font-bold text-sm leading-snug text-foreground/90">
-                            {asset.descricao}
-                          </h4>
-                        </div>
-                        <div className="flex gap-12 text-right">
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-50">
-                              Anterior
-                            </p>
-                            <p className="font-bold text-sm tracking-tight">
-                              {formatCurrency(asset.valorAnterior)}
-                            </p>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-black text-primary uppercase tracking-widest">
-                              Atual
-                            </p>
-                            <p className="font-black text-base text-primary tracking-tight">
-                              {formatCurrency(asset.valorAtual)}
-                            </p>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 pl-6">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 rounded-lg hover:bg-primary/10 hover:text-primary transition-all"
-                              onClick={() => openEditBemDialog(asset)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all"
-                              onClick={() => handleDeleteBem(asset.id)}
-                              disabled={deletingBemId === asset.id}
-                            >
-                              {deletingBemId === asset.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-                    {totalPages > 1 && (
-                      <div className="p-6 flex items-center justify-between bg-muted/10 border-t">
-                        <div className="flex items-center gap-3">
-                          <div className="h-2 w-2 rounded-full bg-primary" />
-                          <p className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">
-                            Exibindo {paginatedAssets.length} de{" "}
-                            {filteredAssets.length} registros
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-9 px-4 rounded-xl font-bold bg-background border-muted-foreground/20 hover:bg-primary/5"
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage((p) => p - 1)}
-                          >
-                            <ChevronLeft className="h-4 w-4 mr-2" /> ANTERIOR
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-9 px-4 rounded-xl font-bold bg-background border-muted-foreground/20 hover:bg-primary/5"
-                            disabled={currentPage === totalPages}
-                            onClick={() => setCurrentPage((p) => p + 1)}
-                          >
-                            PRÓXIMO <ChevronRight className="h-4 w-4 ml-2" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* TAB: AGENDAMENTOS */}
-          <TabsContent value="agendamentos">
-            <Card className="border-none shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm">
-               <CardHeader className="bg-muted/5 border-b py-6">
-                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                   <div className="flex items-center gap-4">
+            {/* TAB: AGENDAMENTOS */}
+            <TabsContent value="agendamentos">
+              <Card className="border-none shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm">
+                <CardHeader className="bg-muted/5 border-b py-6">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex items-center gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
                         <CalendarDays className="h-6 w-6" />
                       </div>
@@ -1879,246 +2164,396 @@ export const ContribuinteDetails = React.memo(
                           Histórico de consultas e status de documentos vinculados
                         </CardDescription>
                       </div>
-                   </div>
-                   
-                   <Button 
-                     size="sm" 
-                     className="h-9 rounded-xl font-black text-[10px] uppercase tracking-widest"
-                     onClick={() => router.push('/agendamentos')}
-                   >
-                     NOVO AGENDAMENTO
-                   </Button>
-                 </div>
-               </CardHeader>
-               <CardContent className="p-0">
-                 {loadingHistory ? (
-                   <div className="flex items-center justify-center py-20 text-muted-foreground">
+                    </div>
+
+                    <Button
+                      size="sm"
+                      className="h-9 rounded-xl font-black text-[10px] uppercase tracking-widest"
+                      onClick={() => router.push("/agendamentos")}
+                    >
+                      NOVO AGENDAMENTO
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {loadingHistory ? (
+                    <div className="flex items-center justify-center py-20 text-muted-foreground">
                       <Loader2 className="h-6 w-6 animate-spin mr-3" />
                       Carregando histórico...
-                   </div>
-                 ) : schedulingHistory.length === 0 ? (
-                   <div className="flex flex-col items-center justify-center py-20 text-center">
+                    </div>
+                  ) : schedulingHistory.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
                       <div className="rounded-full bg-slate-100 p-4 mb-4">
-                         <CalendarDays className="h-8 w-8 text-slate-300" />
+                        <CalendarDays className="h-8 w-8 text-slate-300" />
                       </div>
                       <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest leading-relaxed px-10">
                         Nenhum agendamento encontrado para este CPF.
                       </h3>
-                   </div>
-                 ) : (
-                   <div className="divide-y divide-slate-100">
-                     {schedulingHistory.map((s) => (
-                       <div key={s.id} className="p-6 transition-all hover:bg-slate-50 group">
-                          <div className="flex flex-col gap-6 md:flex-row md:items-center">
-                             <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-white border-2 border-slate-100 shadow-sm group-hover:border-primary/20 group-hover:shadow-md transition-all">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                   {format(parseISO(s.dataAgendamento), "MMM", { locale: ptBR })}
-                                </span>
-                                <span className="text-xl font-black text-slate-900">
-                                   {format(parseISO(s.dataAgendamento), "d")}
-                                </span>
-                             </div>
-
-                             <div className="min-w-0 flex-1 space-y-2">
-                                <div className="flex items-center gap-3">
-                                   <h4 className="truncate text-lg font-black tracking-tight text-slate-900">{s.titulo}</h4>
-                                   <Badge className={cn("rounded-full px-3 py-0.5 text-[9px] font-black uppercase tracking-wider", getStatusColor(s.status))}>
-                                      {getStatusLabel(s.status)}
-                                   </Badge>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                   <span className="flex items-center gap-1.5"><Clock className="h-3 w-3" /> {s.horaInicio || "--:--"}</span>
-                                   {s.tipo && <span className="flex items-center gap-1.5"><FileText className="h-3 w-3" /> {s.tipo}</span>}
-                                   {s.checklistProgress && (
-                                     <span className={cn(
-                                       "px-2 py-0.5 rounded-lg border",
-                                       s.checklistProgress.percentage >= 80 ? "border-emerald-200 text-emerald-600 bg-emerald-50" : "border-slate-100 text-slate-500"
-                                     )}>
-                                       {s.checklistProgress.received}/{s.checklistProgress.total} DOCS
-                                     </span>
-                                   )}
-                                </div>
-                             </div>
-
-                             <div className="flex shrink-0 items-center justify-end">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  className="h-10 rounded-xl font-black text-[10px] uppercase tracking-widest border-2 border-slate-100 hover:border-primary/20 bg-white"
-                                  onClick={() => router.push(`/agendamentos?id=${s.id}`)}
-                                >
-                                  DETALHES
-                                  <ArrowRight className="ml-2 h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
-                                </Button>
-                             </div>
-                          </div>
-                       </div>
-                     ))}
-                   </div>
-                 )}
-               </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        {/* DIALOG: CRUD BENS */}
-        <Sheet
-          open={viewerOpen}
-          onOpenChange={(v) => {
-            setViewerOpen(v)
-            if (!v) setViewerDoc(null)
-          }}
-         
-        >
-          <SheetContent className="w-[520px] sm:w-[520px] p-0 overflow-hidden">
-            <SheetHeader className="px-6 py-4 border-b bg-background">
-              <SheetTitle className="text-base font-black">
-                Visualização de Documento
-              </SheetTitle>
-              <SheetDescription className="text-xs">
-                {viewerDoc?.nome_arquivo || ""}
-              </SheetDescription>
-            </SheetHeader>
-
-            <div className="p-4">
-              {viewerDoc ? (
-                <>
-                  {!viewerDoc.url ? (
-                    <div className="text-sm text-muted-foreground">URL do arquivo indisponível.</div>
-                  ) : viewerDoc.media_type?.includes("pdf") ? (
-                    <iframe
-                      title="viewer-pdf"
-                      src={viewerDoc.url}
-                      className="w-full h-[80vh] rounded-xl border"
-                    />
+                    </div>
                   ) : (
-                    <img
-                      src={viewerDoc.url}
-                      alt={viewerDoc.nome_arquivo}
-                      className="w-full h-auto max-h-[80vh] object-contain rounded-xl border bg-muted"
-                    />
+                    <div className="divide-y divide-slate-100">
+                      {schedulingHistory.map((s) => (
+                        <div key={s.id} className="p-6 transition-all hover:bg-slate-50 group">
+                          <div className="flex flex-col gap-6 md:flex-row md:items-center">
+                            <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-white border-2 border-slate-100 shadow-sm group-hover:border-primary/20 group-hover:shadow-md transition-all">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                {format(parseISO(s.dataAgendamento), "MMM", { locale: ptBR })}
+                              </span>
+                              <span className="text-xl font-black text-slate-900">
+                                {format(parseISO(s.dataAgendamento), "d")}
+                              </span>
+                            </div>
+
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <div className="flex items-center gap-3">
+                                <h4 className="truncate text-lg font-black tracking-tight text-slate-900">{s.titulo}</h4>
+                                <Badge className={cn("rounded-full px-3 py-0.5 text-[9px] font-black uppercase tracking-wider", getStatusColor(s.status))}>
+                                  {getStatusLabel(s.status)}
+                                </Badge>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                <span className="flex items-center gap-1.5">
+                                  <Clock className="h-3 w-3" /> {s.horaInicio || "--:--"}
+                                </span>
+                                {s.tipo && (
+                                  <span className="flex items-center gap-1.5">
+                                    <FileText className="h-3 w-3" /> {s.tipo}
+                                  </span>
+                                )}
+                                {s.checklistProgress && (
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded-lg border",
+                                    s.checklistProgress.percentage >= 80
+                                      ? "border-emerald-200 text-emerald-600 bg-emerald-50"
+                                      : "border-slate-100 text-slate-500"
+                                  )}>
+                                    {s.checklistProgress.received}/{s.checklistProgress.total} DOCS
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 items-center justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-10 rounded-xl font-black text-[10px] uppercase tracking-widest border-2 border-slate-100 hover:border-primary/20 bg-white"
+                                onClick={() => router.push(`/agendamentos?id=${s.id}`)}
+                              >
+                                DETALHES
+                                <ArrowRight className="ml-2 h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          {/* DIALOG: CRUD BENS */}
+          <Dialog open={isBemDialogOpen} onOpenChange={setIsBemDialogOpen}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] bg-background/95 backdrop-blur-xl border-primary/10 shadow-2xl">
+              <DialogHeader className="pb-4 border-b border-muted">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <DialogTitle className="text-3xl font-black tracking-tight flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        {editingBem ? <Pencil className="h-5 w-5" /> : <Package className="h-5 w-5" />}
+                      </div>
+                      {editingBem ? "Editar Patrimônio" : "Novo Bem / Direito"}
+                    </DialogTitle>
+                    <DialogDescription className="font-bold text-[10px] uppercase tracking-[0.2em] text-primary/60 mt-2 flex items-center gap-2">
+                      <span className="flex h-1.5 w-1.5 rounded-full bg-primary" />
+                      Ficha de Bens e Direitos - IRPF {anoExercicio}
+                    </DialogDescription>
+                  </div>
+                  {!editingBem && (
+                    <Button
+                      variant="ghost" 
+                      size="sm"
+                      className="rounded-xl font-black text-[10px] tracking-widest text-primary hover:bg-primary/5 px-4"
+                      onClick={generateDescricao}
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      GERAR DESCRIÇÃO
+                    </Button>
+                  )}
+                </div>
+              </DialogHeader>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 py-6">
+                {/* Coluna Principal: Formulário Inteligente */}
+                <div className="lg:col-span-12 space-y-8">
+                  
+                  {/* Seção 1: Classificação */}
+                  <div className="bg-muted/30 p-6 rounded-[2rem] border border-muted-foreground/5">
+                    <h5 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
+                       <Filter className="h-3 w-3" /> Classificação do Bem
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest ml-1 text-muted-foreground/70">Grupo</Label>
+                        <Select
+                          value={bemForm.grupo}
+                          onValueChange={(v) => {
+                            const firstCode = Object.keys(CODIGOS_BENS[v] || {})[0] || ""
+                            setBemForm({ ...bemForm, grupo: v, codigo: firstCode })
+                          }}
+                        >
+                          <SelectTrigger className="h-14 rounded-2xl border-muted-foreground/10 bg-background shadow-sm hover:border-primary/30 transition-all font-bold text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-2xl">
+                            {Object.entries(GRUPOS_BENS).map(([id, label]) => (
+                              <SelectItem key={id} value={id} className="font-semibold text-xs py-3">{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest ml-1 text-muted-foreground/70">Código</Label>
+                        <Select
+                          value={bemForm.codigo}
+                          onValueChange={(v) => setBemForm({ ...bemForm, codigo: v })}
+                        >
+                          <SelectTrigger className="h-14 rounded-2xl border-muted-foreground/10 bg-background shadow-sm hover:border-primary/30 transition-all font-bold text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-2xl max-h-[300px]">
+                            {Object.entries(CODIGOS_BENS[bemForm.grupo] || { "99": "Outros" }).map(([id, label]) => (
+                              <SelectItem key={id} value={id} className="font-semibold text-xs py-3">{id} - {label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seção 2: Campos Dinâmicos (Condicionais) */}
+                  {bemForm.grupo === "01" && (
+                    <div className="bg-primary/[0.02] p-6 rounded-[2rem] border border-primary/10 animate-in fade-in slide-in-from-top-2">
+                      <h5 className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                         <Building2 className="h-3 w-3" /> Detalhes do Imóvel
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-bold uppercase ml-1">Insc. Municipal (IPTU)</Label>
+                          <Input
+                            placeholder="000000000"
+                            className="h-12 rounded-xl bg-background font-bold"
+                            value={bemForm.iptu}
+                            onChange={(e) => setBemForm({...bemForm, iptu: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-bold uppercase ml-1">Data Aquisição</Label>
+                          <Input
+                            type="date"
+                            className="h-12 rounded-xl bg-background font-bold"
+                            value={bemForm.dataAquisicao}
+                            onChange={(e) => setBemForm({...bemForm, dataAquisicao: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-bold uppercase ml-1">Área Total</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="0.00"
+                              className="h-12 rounded-xl bg-background font-bold flex-1"
+                              value={bemForm.areaTotal}
+                              onChange={(e) => setBemForm({...bemForm, areaTotal: e.target.value})}
+                            />
+                            <Select
+                              value={bemForm.areaUnidade}
+                              onValueChange={(v) => setBemForm({...bemForm, areaUnidade: v})}
+                            >
+                              <SelectTrigger className="w-20 h-12 rounded-xl">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="m2">m²</SelectItem>
+                                <SelectItem value="ha">ha</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="md:col-span-3">
+                           <div className="flex items-center space-x-3 bg-background p-4 rounded-xl border border-muted mb-4">
+                             <Checkbox 
+                                id="registrado" 
+                                checked={bemForm.registradoCartorio}
+                                onCheckedChange={(checked) => setBemForm({...bemForm, registradoCartorio: !!checked})}
+                             />
+                             <Label htmlFor="registrado" className="text-xs font-black uppercase tracking-wider cursor-pointer">Registrado em Cartório?</Label>
+                           </div>
+                           {bemForm.registradoCartorio && (
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in zoom-in-95">
+                                <Input placeholder="Nome do Cartório" className="h-12 rounded-xl font-bold" value={bemForm.cartorioNome} onChange={(e) => setBemForm({...bemForm, cartorioNome: e.target.value})} />
+                                <Input placeholder="Matrícula / Registro" className="h-12 rounded-xl font-bold" value={bemForm.cartorioMatricula} onChange={(e) => setBemForm({...bemForm, cartorioMatricula: e.target.value})} />
+                             </div>
+                           )}
+                        </div>
+                      </div>
+                    </div>
                   )}
 
-                  <div className="mt-4 text-[11px] text-muted-foreground space-y-1">
-                    <div>
-                      <span className="font-bold">Origem:</span> {viewerDoc.origem || "--"}
-                    </div>
-                    <div>
-                      <span className="font-bold">Recebido em:</span> {viewerDoc.recebido_em || "--"}
-                    </div>
-                    {typeof viewerDoc.confianca_extracao === "number" && (
-                      <div>
-                        <span className="font-bold">Confiança:</span> {Math.round(viewerDoc.confianca_extracao * 100)}%
+                  {bemForm.grupo === "02" && bemForm.codigo === "01" && (
+                     <div className="bg-primary/[0.02] p-6 rounded-[2rem] border border-primary/10 animate-in fade-in slide-in-from-top-2">
+                      <h5 className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                         <Car className="h-3 w-3" /> Detalhes do Veículo
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-bold uppercase ml-1">RENAVAM</Label>
+                          <Input
+                            placeholder="00000000000"
+                            className="h-12 rounded-xl bg-background font-bold"
+                            value={bemForm.renavam}
+                            onChange={(e) => setBemForm({...bemForm, renavam: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-bold uppercase ml-1">Placa</Label>
+                          <Input
+                            placeholder="ABC-1234"
+                            className="h-12 rounded-xl bg-background font-bold"
+                            value={bemForm.placa}
+                            onChange={(e) => setBemForm({...bemForm, placa: e.target.value})}
+                          />
+                        </div>
                       </div>
-                    )}
+                    </div>
+                  )}
+
+                  {["03", "04", "06", "07"].includes(bemForm.grupo) && (
+                     <div className="bg-primary/[0.02] p-6 rounded-[2rem] border border-primary/10 animate-in fade-in slide-in-from-top-2">
+                      <h5 className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                         <CreditCard className="h-3 w-3" /> Dados da Instituição / Empresa
+                      </h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-bold uppercase ml-1">CNPJ</Label>
+                          <Input
+                            placeholder="00.000.000/0000-00"
+                            className="h-12 rounded-xl bg-background font-bold"
+                            value={bemForm.cnpjInst}
+                            onChange={(e) => setBemForm({...bemForm, cnpjInst: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-bold uppercase ml-1">Nome da Instituição</Label>
+                          <Input
+                            placeholder="Ex: Banco Itaú S.A."
+                            className="h-12 rounded-xl bg-background font-bold"
+                            value={bemForm.nomeInst}
+                            onChange={(e) => setBemForm({...bemForm, nomeInst: e.target.value})}
+                          />
+                        </div>
+                        <div className="md:col-span-2 grid grid-cols-3 gap-4">
+                           <div className="space-y-1">
+                             <Label className="text-[9px] font-black text-muted-foreground uppercase">Agência</Label>
+                             <Input className="h-10 rounded-lg font-bold" value={bemForm.agencia} onChange={(e) => setBemForm({...bemForm, agencia: e.target.value})} />
+                           </div>
+                           <div className="space-y-1">
+                             <Label className="text-[9px] font-black text-muted-foreground uppercase">Conta</Label>
+                             <Input className="h-10 rounded-lg font-bold" value={bemForm.conta} onChange={(e) => setBemForm({...bemForm, conta: e.target.value})} />
+                           </div>
+                           <div className="space-y-1">
+                             <Label className="text-[9px] font-black text-muted-foreground uppercase">DV</Label>
+                             <Input className="h-10 rounded-lg font-bold" value={bemForm.digito} onChange={(e) => setBemForm({...bemForm, digito: e.target.value})} />
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Seção 3: Discriminação (Texto Final) */}
+                  <div className="space-y-2 relative">
+                    <Label className="text-[10px] font-black uppercase tracking-widest ml-1 text-muted-foreground/70 flex items-center justify-between">
+                      <span>Discriminação (Consolidado para Receita)</span>
+                      <span className="text-[9px] font-normal text-muted-foreground lowercase">{bemForm.descricao.length} caracteres</span>
+                    </Label>
+                    <div className="relative group">
+                      <Textarea
+                        className="rounded-3xl min-h-[160px] text-[13px] font-bold leading-relaxed border-muted-foreground/10 bg-muted/10 focus-visible:ring-primary/20 p-6 resize-none transition-all group-hover:bg-muted/20"
+                        placeholder="Clique em 'GERAR DESCRIÇÃO' após preencher os dados acima ou digite manualmente..."
+                        value={bemForm.descricao}
+                        onChange={(e) => setBemForm({ ...bemForm, descricao: e.target.value })}
+                      />
+                      <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                            <Sparkles className="h-4 w-4" />
+                         </div>
+                      </div>
+                    </div>
                   </div>
-                </>
-              ) : (
-                <div className="h-[80vh] flex flex-col items-center justify-center text-muted-foreground text-sm font-bold text-center px-6">
-                  Selecione um documento no checklist para visualizar
-                </div>
-              )}
-            </div>
-          </SheetContent>
-        </Sheet>
 
-        <Dialog open={isBemDialogOpen} onOpenChange={setIsBemDialogOpen}>
-          <DialogContent className="max-w-2xl rounded-[2.5rem]">
-
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-black tracking-tight">
-                {editingBem ? "Editar Patrimônio" : "Cadastrar Novo Bem / Direito"}
-              </DialogTitle>
-              <DialogDescription className="font-bold text-xs uppercase tracking-widest text-primary">
-                Preencha os campos conforme as fichas da Receita Federal
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid gap-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Grupo</Label>
-                  <Select 
-                    value={bemForm.grupo} 
-                    onValueChange={(v) => setBemForm({...bemForm, grupo: v})}
-                  >
-                    <SelectTrigger className="h-12 rounded-xl border-muted-foreground/20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(GRUPOS_BENS).map(([id, label]) => (
-                        <SelectItem key={id} value={id}>{id} - {label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Código</Label>
-                  <Input 
-                    type="number"
-                    className="h-12 rounded-xl"
-                    value={bemForm.codigo}
-                    onChange={(e) => setBemForm({...bemForm, codigo: e.target.value})}
-                  />
+                  {/* Seção 4: Valores */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-muted pt-8">
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-black uppercase tracking-widest ml-1 text-muted-foreground/50">
+                        Situação em 31/12/{anoExercicio - 1} (Anterior)
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          className="h-16 rounded-[1.25rem] font-black text-lg bg-background border-muted-foreground/10 shadow-inner px-6 text-muted-foreground/60"
+                          value={bemForm.valorAnterior}
+                          onChange={(e) => setBemForm({ ...bemForm, valorAnterior: maskBRL(e.target.value) })}
+                        />
+                         <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-muted rounded-l-[1.25rem]" />
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-black uppercase tracking-widest ml-1 text-primary">
+                        Situação em 31/12/{anoExercicio} (Atual)
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          className="h-16 rounded-[1.25rem] font-black text-xl bg-primary/[0.03] border-primary/20 shadow-inner px-6 text-primary focus-visible:ring-primary/30"
+                          value={bemForm.valorAtual}
+                          onChange={(e) => setBemForm({ ...bemForm, valorAtual: maskBRL(e.target.value) })}
+                        />
+                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary rounded-l-[1.25rem]" />
+                        <TrendingUp className="absolute right-6 top-1/2 -translate-y-1/2 h-5 w-5 text-primary/30" />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Discriminação</Label>
-                <Textarea 
-                  className="rounded-2xl min-h-[120px] text-sm font-bold"
-                  placeholder="Ex: APARTAMENTO LOCALIZADO NA RUA..."
-                  value={bemForm.descricao}
-                  onChange={(e) => setBemForm({...bemForm, descricao: e.target.value})}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1">
-                    Situação em 31/12/{anoExercicio - 1}
-                  </Label>
-                  <Input 
-                    type="number"
-                    className="h-12 rounded-xl font-bold"
-                    value={bemForm.valorAnterior}
-                    onChange={(e) => setBemForm({...bemForm, valorAnterior: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1 text-primary">
-                    Situação em 31/12/{anoExercicio}
-                  </Label>
-                  <Input 
-                    type="number"
-                    className="h-12 rounded-xl font-bold border-primary/40 focus:ring-primary"
-                    value={bemForm.valorAtual}
-                    onChange={(e) => setBemForm({...bemForm, valorAtual: e.target.value})}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button 
-                variant="outline" 
-                className="h-12 rounded-xl font-bold"
-                onClick={() => setIsBemDialogOpen(false)}
-              >
-                CANCELAR
-              </Button>
-              <Button 
-                className="h-12 rounded-xl px-8 font-black shadow-lg shadow-primary/20"
-                onClick={handleSaveBem}
-                disabled={savingBem}
-              >
-                {savingBem ? <Loader2 className="h-4 w-4 animate-spin" /> : "SALVAR PATRIMÔNIO"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter className="pt-6 border-t border-muted">
+                <Button
+                  variant="ghost"
+                  className="h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-muted"
+                  onClick={() => setIsBemDialogOpen(false)}
+                >
+                  DESCARTAR
+                </Button>
+                <Button
+                  className="h-14 rounded-2xl px-12 font-black text-[11px] uppercase tracking-widest shadow-xl shadow-primary/30 active:scale-95 transition-all bg-primary"
+                  onClick={handleSaveBem}
+                  disabled={savingBem}
+                >
+                  {savingBem ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="h-4 w-4" />
+                      FINALIZAR E SALVAR
+                    </div>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     )
   }
 )
+
+export default ContribuinteDetails
