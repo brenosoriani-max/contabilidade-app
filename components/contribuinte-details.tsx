@@ -116,9 +116,17 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import {
+import { 
   AppHeader,
 } from "@/components/app-header"
+
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 
 /* ───────────────────────────── */
 
@@ -355,6 +363,22 @@ export const ContribuinteDetails = React.memo(
     const [formatoExport, setFormatoExport] = useState<"xml" | "posicional" | "dec">("dec")
     const [customTag, setCustomTag] = useState("")
     const [manualChecks, setManualChecks] = useState<Record<string, boolean>>({})
+    const [viewerOpen, setViewerOpen] = useState(true)
+    const [viewerDoc, setViewerDoc] = useState<
+      | null
+      | {
+          tag: string
+          nome_arquivo: string
+          tamanho_bytes: number
+          media_type: string
+          url: string | null
+          origem: string
+          recebido_em: string
+          confianca_extracao?: number
+        }
+    >(null)
+
+
     const [savingField, setSavingField] = useState<string | null>(null)
     const [schedulingHistory, setSchedulingHistory] = useState<Scheduling[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
@@ -1385,17 +1409,17 @@ export const ContribuinteDetails = React.memo(
                                     {getDocsForItem(item.fieldId).length > 0 && (
                                       <div className="mt-2 flex flex-wrap gap-2 animate-in fade-in-50 duration-300">
                                         {getDocsForItem(item.fieldId).map((doc, dIdx) => (
-                                          <a
+                                          <button
                                             key={dIdx}
-                                            href={doc.url || "#"}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
+                                            type="button"
                                             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/5 hover:bg-primary/10 border border-primary/10 hover:border-primary/20 text-[10px] font-bold text-primary transition-all group/doc"
-                                            onClick={(e) => {
+                                            onClick={() => {
                                               if (!doc.url) {
-                                                e.preventDefault()
                                                 toast.error("URL do arquivo não disponível.")
+                                                return
                                               }
+                                              setViewerDoc(doc)
+                                              setViewerOpen(true)
                                             }}
                                           >
                                             <FileText className="h-3.5 w-3.5 text-primary/80" />
@@ -1404,38 +1428,57 @@ export const ContribuinteDetails = React.memo(
                                               ({(doc.tamanho_bytes / 1024).toFixed(1)} KB)
                                             </span>
                                             <ExternalLink className="h-3 w-3 opacity-60 group-hover/doc:opacity-100 group-hover/doc:translate-x-0.5 transition-all" />
-                                          </a>
+                                          </button>
                                         ))}
                                       </div>
                                     )}
+
                                   </div>
                                 </div>
 
-                                {!item.ok && (
+                                {(!item.ok || manualChecks[item.fieldId]) && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 pr-2 pl-4 rounded-xl text-[10px] font-black tracking-widest text-primary hover:bg-primary/10 transition-all group shrink-0"
+                                    className={cn(
+                                      "h-8 pr-2 pl-4 rounded-xl text-[10px] font-black tracking-widest text-primary hover:bg-primary/10 transition-all group shrink-0",
+                                      manualChecks[item.fieldId] && "text-emerald-600"
+                                    )}
                                     onClick={() => {
+                                      if (manualChecks[item.fieldId]) {
+                                        // Reabrir edição quando for concluído manualmente (opção B)
+                                        if (item.type === "doc") {
+                                          setTag(item.fieldId)
+                                          handleTabChange("documentos")
+                                          toast.info(`Editar documento manual: ${item.label}`)
+                                        } else {
+                                          handleTabChange("dados")
+                                          setHighlightedField(item.fieldId)
+                                          toast.info(`Reabrir campo manual na aba Dados: ${item.label}`)
+                                        }
+                                        return
+                                      }
+
                                       if (item.type === "doc") {
                                         setTag(item.fieldId)
                                         handleTabChange("documentos")
-                                        toast.info(
-                                          `Local de upload para: ${item.label}`
-                                        )
+                                        toast.info(`Local de upload para: ${item.label}`)
                                       } else {
                                         handleTabChange("dados")
                                         setHighlightedField(item.fieldId)
-                                        toast.info(
-                                          `Campo destacado na aba Dados: ${item.label}`
-                                        )
+                                        toast.info(`Campo destacado na aba Dados: ${item.label}`)
                                       }
                                     }}
                                   >
-                                    {item.type === "doc" ? "ANEXAR" : "PREENCHER"}
+                                    {manualChecks[item.fieldId]
+                                      ? "Atualizado manualmente"
+                                      : item.type === "doc"
+                                        ? "ANEXAR"
+                                        : "PREENCHER"}
                                     <ArrowRight className="ml-2 h-3 w-3 group-hover:translate-x-1 transition-transform" />
                                   </Button>
                                 )}
+
                               </div>
                             )
                           })}
@@ -1919,8 +1962,69 @@ export const ContribuinteDetails = React.memo(
         </Tabs>
 
         {/* DIALOG: CRUD BENS */}
+        <Sheet
+          open={viewerOpen}
+          onOpenChange={(v) => {
+            setViewerOpen(v)
+            if (!v) setViewerDoc(null)
+          }}
+         
+        >
+          <SheetContent className="w-[520px] sm:w-[520px] p-0 overflow-hidden">
+            <SheetHeader className="px-6 py-4 border-b bg-background">
+              <SheetTitle className="text-base font-black">
+                Visualização de Documento
+              </SheetTitle>
+              <SheetDescription className="text-xs">
+                {viewerDoc?.nome_arquivo || ""}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="p-4">
+              {viewerDoc ? (
+                <>
+                  {!viewerDoc.url ? (
+                    <div className="text-sm text-muted-foreground">URL do arquivo indisponível.</div>
+                  ) : viewerDoc.media_type?.includes("pdf") ? (
+                    <iframe
+                      title="viewer-pdf"
+                      src={viewerDoc.url}
+                      className="w-full h-[80vh] rounded-xl border"
+                    />
+                  ) : (
+                    <img
+                      src={viewerDoc.url}
+                      alt={viewerDoc.nome_arquivo}
+                      className="w-full h-auto max-h-[80vh] object-contain rounded-xl border bg-muted"
+                    />
+                  )}
+
+                  <div className="mt-4 text-[11px] text-muted-foreground space-y-1">
+                    <div>
+                      <span className="font-bold">Origem:</span> {viewerDoc.origem || "--"}
+                    </div>
+                    <div>
+                      <span className="font-bold">Recebido em:</span> {viewerDoc.recebido_em || "--"}
+                    </div>
+                    {typeof viewerDoc.confianca_extracao === "number" && (
+                      <div>
+                        <span className="font-bold">Confiança:</span> {Math.round(viewerDoc.confianca_extracao * 100)}%
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="h-[80vh] flex flex-col items-center justify-center text-muted-foreground text-sm font-bold text-center px-6">
+                  Selecione um documento no checklist para visualizar
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+
         <Dialog open={isBemDialogOpen} onOpenChange={setIsBemDialogOpen}>
           <DialogContent className="max-w-2xl rounded-[2.5rem]">
+
             <DialogHeader>
               <DialogTitle className="text-2xl font-black tracking-tight">
                 {editingBem ? "Editar Patrimônio" : "Cadastrar Novo Bem / Direito"}
