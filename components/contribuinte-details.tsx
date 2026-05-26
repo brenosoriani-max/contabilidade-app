@@ -903,6 +903,19 @@ export const ContribuinteDetails = React.memo(
       return filteredAssets.slice(start, start + ITEMS_PER_PAGE)
     }, [filteredAssets, currentPage])
 
+        const localTotalBensAtual = useMemo(
+      () => assets.reduce((sum, a) => sum + (Number(a.valorAtual) || 0), 0),
+      [assets]
+    )
+
+    const localTotalBensAnterior = useMemo(
+      () => assets.reduce((sum, a) => sum + (Number(a.valorAnterior) || 0), 0),
+      [assets]
+    )
+
+    const localVariation = localTotalBensAtual - localTotalBensAnterior
+    const localVariationPercent = localVariation / (localTotalBensAnterior || 1)
+
     const statusLabel = getResultLabel(declaration?.resultadoDeclaracao || null)
     const statusClasses = getResultColor(declaration?.resultadoDeclaracao || null)
     const variation = (Number(declaration?.totalBensAtual) || 0) - (Number(declaration?.totalBensAnterior) || 0)
@@ -1257,9 +1270,11 @@ export const ContribuinteDetails = React.memo(
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <StatCard title="Rendimentos" value={formatCurrency(declaration.totalRendPJ)} icon={<Landmark className="h-5 w-5" />} />
               <StatCard title="IRRF" value={formatCurrency(declaration.totalIRRF)} icon={<Calculator className="h-5 w-5" />} />
-              <StatCard title="Patrimônio" value={formatCurrency(declaration.totalBensAtual)} icon={<Building2 className="h-5 w-5" />} />
-              <StatCard title="Variação" value={`${variation >= 0 ? "+" : ""}${formatPercent(variationPercent)}`}
-                icon={variation >= 0 ? <TrendingUp className="h-5 w-5 text-emerald-600" /> : <TrendingDown className="h-5 w-5 text-red-500" />}
+             <StatCard title="Patrimônio" value={formatCurrency(localTotalBensAtual)} icon={<Building2 className="h-5 w-5" />} />
+              <StatCard
+                title="Variação"
+                value={`${localVariation >= 0 ? "+" : ""}${formatPercent(localVariationPercent)}`}
+                icon={localVariation >= 0 ? <TrendingUp className="h-5 w-5 text-emerald-600" /> : <TrendingDown className="h-5 w-5 text-red-500" />}
               />
             </div>
           ) : (
