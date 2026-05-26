@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { fail } from '@/lib/server/api';
 import { requireAuth } from '@/lib/server/auth';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 // Extend jsPDF with autotable types for TS
 interface jsPDFWithPlugin extends jsPDF {
@@ -27,6 +27,10 @@ export async function GET(
         contribuinte: true,
         bensDireitos: true,
         rendimentosTributaveis: true,
+        rendimentosIsentos: true,
+        dividasOnus: true,
+        deducoes: true,
+        dependentes: true,
       },
     });
 
@@ -34,81 +38,252 @@ export async function GET(
 
     const doc = new jsPDF() as jsPDFWithPlugin;
     const { contribuinte } = decl;
+    const fmt = (val: any) =>
+      new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      }).format(Number(val));
 
-    // Header
-    doc.setFillColor(0, 51, 102);
-    doc.rect(0, 0, 210, 40, 'F');
-    
+    // --- PAGE 1: COVER & SUMMARY ---
+    // Header background
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, 210, 50, 'F');
+
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
+    doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text('CONTEC - SISTEMA CONTÁBIL', 15, 20);
-    
+    doc.text('CONTEC', 15, 25);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`DOSSIÊ FISCAL - EXERCÍCIO ${decl.anoExercicio}`, 15, 30);
-    doc.text(`GERADO EM: ${new Date().toLocaleString('pt-BR')}`, 140, 30);
+    doc.text('TECNOLOGIA CONTÁBIL AVANÇADA', 15, 32);
 
-    // Dados do Contribuinte
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(14);
+    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('1. DADOS DO CONTRIBUINTE', 15, 55);
-    
+    doc.text(`DOSSIÊ FISCAL IRPF ${decl.anoExercicio}`, 140, 25, { align: 'right' });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`GERADO EM: ${new Date().toLocaleString('pt-BR')}`, 140, 32, { align: 'right' });
+
+    // Contribuinte Header
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(contribuinte.nome.toUpperCase(), 15, 65);
+
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`NOME: ${contribuinte.nome}`, 15, 65);
     doc.text(`CPF: ${contribuinte.cpf}`, 15, 72);
-    doc.text(`DATA NASCIMENTO: ${contribuinte.dataNascimento ? contribuinte.dataNascimento.toLocaleDateString('pt-BR') : 'N/A'}`, 15, 79);
-    doc.text(`EMAIL: ${contribuinte.email || 'N/A'}`, 15, 86);
-    doc.text(`TELEFONE: ${contribuinte.telefone || 'N/A'}`, 110, 86);
+    doc.text(`NASCIMENTO: ${contribuinte.dataNascimento ? contribuinte.dataNascimento.toLocaleDateString('pt-BR') : '---'}`, 60, 72);
+    doc.text(`EXERCÍCIO: ${decl.anoExercicio} (ANO-CALENDÁRIO: ${decl.anoExercicio - 1})`, 120, 72);
 
-    // Resumo Financeiro
-    doc.setFontSize(14);
+    // Summary Box
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.roundedRect(15, 85, 180, 55, 3, 3, 'F');
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(15, 85, 180, 55, 3, 3, 'D');
+
+    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('2. RESUMO DA DECLARAÇÃO', 15, 105);
-    
+    doc.text('RESUMO DA DECLARAÇÃO', 25, 95);
+
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    const fmt = (val: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val));
-    
-    doc.text(`TOTAL RENDIMENTOS: ${fmt(decl.totalRendimentosTributaveis)}`, 15, 115);
-    doc.text(`BASE DE CÁLCULO: ${fmt(decl.baseCalculo)}`, 15, 122);
-    doc.text(`IMPOSTO DEVIDO: ${fmt(decl.impostoDevido)}`, 110, 115);
-    
-    if (Number(decl.impostoRestituir) > 0) {
-      doc.setTextColor(0, 128, 0);
-      doc.text(`IMPOSTO A RESTITUIR: ${fmt(decl.impostoRestituir)}`, 110, 122);
-    } else {
-      doc.setTextColor(200, 0, 0);
-      doc.text(`IMPOSTO A PAGAR: ${fmt(decl.impostoPagar)}`, 110, 122);
-    }
+    doc.text('TOTAL RENDIMENTOS:', 25, 105);
+    doc.text(fmt(decl.totalRendimentosTributaveis), 85, 105);
+
+    doc.text('BASE DE CÁLCULO:', 25, 112);
+    doc.text(fmt(decl.baseCalculo), 85, 112);
+
+    doc.text('IMPOSTO DEVIDO:', 25, 119);
+    doc.text(fmt(decl.impostoDevido), 85, 119);
+
+    const resultado = Number(decl.impostoRestituir) > 0;
+    doc.setFont('helvetica', 'bold');
+    doc.text(resultado ? 'SALDO A RESTITUIR:' : 'SALDO A PAGAR:', 25, 130);
+    if (resultado) doc.setTextColor(5, 150, 105); // emerald-600
+    else doc.setTextColor(220, 38, 38); // red-600
+    doc.text(fmt(resultado ? decl.impostoRestituir : decl.impostoPagar), 85, 130);
     doc.setTextColor(0, 0, 0);
 
-    // Bens e Direitos Table
+    // Status / Metadata
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SITUAÇÃO DO DOSSIÊ:', 125, 105);
+    doc.setFont('helvetica', 'normal');
+    doc.text(decl.situacao.toUpperCase(), 165, 105);
+    doc.text('TIPO:', 125, 112);
+    doc.text(decl.tipoDeclaracao.toUpperCase(), 165, 112);
+    doc.text('MODELO:', 125, 119);
+    doc.text(decl.modelo.toUpperCase(), 165, 119);
+
+    // --- SECTIONS ---
+    let currentY = 155;
+
+    // 1. RENDIMENTOS TRIBUTÁVEIS
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('3. BENS E DIREITOS', 15, 140);
+    doc.text('1. RENDIMENTOS TRIBUTÁVEIS (PJ)', 15, currentY);
+    
+    if (decl.rendimentosTributaveis.length > 0) {
+      const rendData = decl.rendimentosTributaveis.map(r => [
+        r.cnpjFonte || '',
+        r.nomeFonte || '',
+        fmt(r.valorRendimento),
+        fmt(r.valorIrrf),
+        fmt(r.valor13o)
+      ]);
 
-    const bensData = decl.bensDireitos.map(b => [
-      b.grupo || '',
-      b.codigo || '',
-      b.descricao || '',
-      fmt(b.valorAnterior),
-      fmt(b.valorAtual)
-    ]);
+      autoTable(doc, {
+        startY: currentY + 5,
+        head: [['CNPJ', 'Fonte Pagadora', 'Rendimento', 'IRRF', '13º Salário']],
+        body: rendData,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42], fontSize: 8 },
+        styles: { fontSize: 7 },
+        margin: { left: 15, right: 15 }
+      });
+      currentY = (doc as any).lastAutoTable.finalY + 15;
+    } else {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'italic');
+      doc.text('Nenhum rendimento tributável lançado.', 15, currentY + 10);
+      currentY += 25;
+    }
 
-    doc.autoTable({
-      startY: 145,
-      head: [['Grupo', 'Cód', 'Descrição', 'Sit. Anterior', 'Sit. Atual']],
-      body: bensData,
-      theme: 'striped',
-      headStyles: { fillColor: [0, 51, 102] },
-      styles: { fontSize: 8 },
-      columnStyles: {
-        2: { cellWidth: 80 }
-      }
-    });
+    // 2. RENDIMENTOS ISENTOS
+    if (currentY > 250) { doc.addPage(); currentY = 20; }
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('2. RENDIMENTOS ISENTOS / NÃO TRIBUTÁVEIS', 15, currentY);
+
+    if (decl.rendimentosIsentos.length > 0) {
+        const isentosData = decl.rendimentosIsentos.map(r => [
+          r.codigo || '',
+          r.descricao || '',
+          r.nomeFonte || '',
+          fmt(r.valor)
+        ]);
+  
+        autoTable(doc, {
+          startY: currentY + 5,
+          head: [['Cód', 'Descrição', 'Fonte', 'Valor']],
+          body: isentosData,
+          theme: 'grid',
+          headStyles: { fillColor: [15, 23, 42], fontSize: 8 },
+          styles: { fontSize: 7 },
+          margin: { left: 15, right: 15 }
+        });
+        currentY = (doc as any).lastAutoTable.finalY + 15;
+    } else {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'italic');
+      doc.text('Nenhum rendimento isento lançado.', 15, currentY + 10);
+      currentY += 25;
+    }
+
+    // 3. BENS E DIREITOS
+    if (currentY > 250) { doc.addPage(); currentY = 20; }
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('3. BENS E DIREITOS', 15, currentY);
+
+    if (decl.bensDireitos.length > 0) {
+      const bensData = decl.bensDireitos.map(b => [
+        `G${b.grupo} C${b.codigo}`,
+        b.descricao || '',
+        fmt(b.valorAnterior),
+        fmt(b.valorAtual)
+      ]);
+
+      autoTable(doc, {
+        startY: currentY + 5,
+        head: [['Ref', 'Discriminação', `31/12/${decl.anoExercicio - 1}`, `31/12/${decl.anoExercicio}`]],
+        body: bensData,
+        theme: 'striped',
+        headStyles: { fillColor: [15, 23, 42], fontSize: 8 },
+        styles: { fontSize: 7 },
+        columnStyles: { 1: { cellWidth: 100 } },
+        margin: { left: 15, right: 15 }
+      });
+      currentY = (doc as any).lastAutoTable.finalY + 15;
+    } else {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'italic');
+      doc.text('Nenhum bem lançado.', 15, currentY + 10);
+      currentY += 25;
+    }
+
+    // 4. DÍVIDAS E ÔNUS
+    if (currentY > 250) { doc.addPage(); currentY = 20; }
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('4. DÍVIDAS E ÔNUS REAIS', 15, currentY);
+
+    if (decl.dividasOnus.length > 0) {
+      const divData = decl.dividasOnus.map(d => [
+        d.codigo || '',
+        d.descricao || '',
+        fmt(d.valorAnterior),
+        fmt(d.valorAtual),
+        fmt(d.valorPago)
+      ]);
+
+      autoTable(doc, {
+        startY: currentY + 5,
+        head: [['Cód', 'Discriminação', 'Sit. Anterior', 'Sit. Atual', 'Total Pago']],
+        body: divData,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42], fontSize: 8 },
+        styles: { fontSize: 7 },
+        margin: { left: 15, right: 15 }
+      });
+      currentY = (doc as any).lastAutoTable.finalY + 15;
+    } else {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'italic');
+        doc.text('Nenhuma dívida lançada.', 15, currentY + 10);
+        currentY += 25;
+    }
+
+    // 5. DEPENDENTES
+    if (currentY > 250) { doc.addPage(); currentY = 20; }
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('5. DEPENDENTES', 15, currentY);
+
+    if (decl.dependentes.length > 0) {
+      const depData = decl.dependentes.map(d => [
+        d.tipo || '',
+        d.nome || '',
+        d.cpf || '',
+        d.dataNascimento ? d.dataNascimento.toLocaleDateString('pt-BR') : ''
+      ]);
+
+      autoTable(doc, {
+        startY: currentY + 5,
+        head: [['Tipo', 'Nome', 'CPF', 'Nascimento']],
+        body: depData,
+        theme: 'grid',
+        headStyles: { fillColor: [15, 23, 42], fontSize: 8 },
+        styles: { fontSize: 7 },
+        margin: { left: 15, right: 15 }
+      });
+      currentY = (doc as any).lastAutoTable.finalY + 15;
+    } else {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'italic');
+        doc.text('Nenhum dependente lançado.', 15, currentY + 10);
+        currentY += 25;
+    }
+
+    // Footer on all pages
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(`Folha ${i} de ${pageCount} | Dossiê Gerado p/ Sistema CONTEC`, 105, 285, { align: 'center' });
+    }
 
     const pdfOutput = doc.output('arraybuffer');
 
@@ -121,6 +296,8 @@ export async function GET(
     });
   } catch (error) {
     console.error('Erro ao gerar PDF:', error);
-    return fail('Erro interno ao gerar PDF', 500);
+    const msg = error instanceof Error ? error.message : 'Erro interno ao gerar PDF';
+    return fail(msg, 500);
   }
 }
+

@@ -14,7 +14,7 @@ export async function PUT(
     const { id, bid } = await params;
     const body = await request.json();
 
-    const { grupo, codigo, descricao, valorAnterior, valorAtual } = body;
+    const { grupo, codigo, descricao, valorAnterior, valorAtual, detalhes } = body;
 
     const bem = await prisma.bemDireito.update({
       where: { 
@@ -27,6 +27,7 @@ export async function PUT(
         descricao,
         valorAnterior: Number(valorAnterior || 0),
         valorAtual: Number(valorAtual || 0),
+        detalhes: detalhes || {},
       },
     });
 

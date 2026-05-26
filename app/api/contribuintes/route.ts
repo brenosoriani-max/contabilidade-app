@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     const uf = searchParams.get('uf') || '';
     const exercicio = searchParams.get('exercicio') || '';
     const resultado = searchParams.get('resultado') || '';
+    const situacao = searchParams.get('situacao') || '';
     const offset = (page - 1) * limit;
 
     const where: any = {};
@@ -71,6 +72,30 @@ export async function GET(request: NextRequest) {
           impostoPagar: { gt: 0 },
         },
       };
+    }
+
+    if (situacao) {
+      if (situacao === 'nao_iniciada') {
+        // Fallback para quem não tem declaração começada (exercício atual ou geral)
+        // Se exercicio estiver setado, pegamos quem não tem declaração naquele exercício
+        if (exercicio) {
+          where.NOT = {
+            declaracoes: {
+              some: { anoExercicio: Number.parseInt(exercicio, 10) }
+            }
+          };
+        } else {
+          where.declaracoes = { none: {} };
+        }
+      } else {
+        where.declaracoes = {
+          ...(where.declaracoes ?? {}),
+          some: {
+            ...(where.declaracoes?.some ?? {}),
+            situacao: situacao,
+          }
+        };
+      }
     }
 
     const [contribuintes, total] = await prisma.$transaction([

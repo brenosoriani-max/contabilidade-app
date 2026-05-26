@@ -52,6 +52,8 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCw,
+  Archive,
+  Layout,
 } from "lucide-react"
 
 import type {
@@ -106,6 +108,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -127,10 +130,18 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
-/* ─────────────────────────────────────────────────────────────────
-   Constants
-───────────────────────────────────────────────────────────────── */
+
 
 interface Props {
   declaration: Declaration | null
@@ -218,9 +229,7 @@ const CODIGOS_BENS: Record<string, Record<string, string>> = {
   },
 }
 
-/* ─────────────────────────────────────────────────────────────────
-   BemForm type
-───────────────────────────────────────────────────────────────── */
+
 
 interface BemForm {
   grupo: string
@@ -266,9 +275,7 @@ const EMPTY_BEM_FORM: BemForm = {
   digito: "",
 }
 
-/* ─────────────────────────────────────────────────────────────────
-   Shared micro-components (memoised)
-───────────────────────────────────────────────────────────────── */
+
 
 const inputCls =
   "h-12 rounded-xl bg-background font-bold border-muted-foreground/10 focus-visible:ring-primary/20 focus-visible:border-primary/30 transition-colors"
@@ -323,15 +330,15 @@ const SecaoImovel = memo(
         </FieldGroup>
 
         <FieldGroup label="Área Total">
-          <div className=" gap-5">
-            <Input placeholder="0,00" className="flex-1 mb-2" value={form.areaTotal} onChange={onChange("areaTotal")} />
+          <div className="flex items-center gap-2">
+            <Input placeholder="0,00" className={cn(inputCls, "flex-1")} value={form.areaTotal} onChange={onChange("areaTotal")} />
             <Select value={form.areaUnidade} onValueChange={onSelect("areaUnidade")}>
-              <SelectTrigger className="w-20 h-12 rounded-xl font-bold text-sm border-muted-foreground/10">
+              <SelectTrigger className="w-24 h-12 rounded-xl font-bold text-sm border-muted-foreground/10 bg-background shadow-sm">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="m2">m²</SelectItem>
-                <SelectItem value="ha">ha</SelectItem>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="m2" className="text-xs font-semibold">m²</SelectItem>
+                <SelectItem value="ha" className="text-xs font-semibold">ha</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -506,9 +513,7 @@ function Field({
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────
-   Main component
-───────────────────────────────────────────────────────────────── */
+
 
 export const ContribuinteDetails = React.memo(
   ({ declaration, contribuinte, assets = [], onDataRefresh }: Props) => {
@@ -545,6 +550,8 @@ export const ContribuinteDetails = React.memo(
       confianca_extracao?: number
     }>(null)
     const [isViewerMaximized, setIsViewerMaximized] = useState(false)
+    const [finalizando, setFinalizando] = useState(false)
+    const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false)
     const [savingField, setSavingField] = useState<string | null>(null)
     const [schedulingHistory, setSchedulingHistory] = useState<Scheduling[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
@@ -561,11 +568,7 @@ export const ContribuinteDetails = React.memo(
     const cpf = contribuinte?.cpf ?? null
     const anoExercicio = declaration?.anoExercicio ?? new Date().getFullYear()
 
-    /* ─── Stable BemForm handlers ───────────────────────────────
-       Using functional updater: setBemForm(prev => ...) means these
-       callbacks never need to capture `bemForm` in their closure,
-       so their references stay stable across renders.
-    ─────────────────────────────────────────────────────────── */
+  
 
     const handleBemChange = useCallback(
       (field: keyof BemForm) =>
@@ -605,7 +608,7 @@ export const ContribuinteDetails = React.memo(
       []
     )
 
-    /* ─── Dialog open/close helpers ─── */
+ 
 
     const openNewBemDialog = useCallback(() => {
       setEditingBem(null)
@@ -615,37 +618,54 @@ export const ContribuinteDetails = React.memo(
 
     const openEditBemDialog = useCallback((bem: BemDireito) => {
       setEditingBem(bem)
+      
+      const vAnt = typeof bem.valorAnterior === "string" ? parseFloat(bem.valorAnterior) : Number(bem.valorAnterior || 0)
+      const vAtu = typeof bem.valorAtual === "string" ? parseFloat(bem.valorAtual) : Number(bem.valorAtual || 0)
+
       setBemForm({
         ...EMPTY_BEM_FORM,
         grupo: String(bem.grupo || "").padStart(2, "0"),
         codigo: String(bem.codigo || "").padStart(2, "0"),
         descricao: bem.descricao || "",
-        valorAnterior: maskBRL(String(bem.valorAnterior || 0).replace(".", "")),
-        valorAtual: maskBRL(String(bem.valorAtual || 0).replace(".", "")),
+        valorAnterior: maskBRL((vAnt * 100).toFixed(0)),
+        valorAtual: maskBRL((vAtu * 100).toFixed(0)),
+        ...(bem.detalhes || {})
       })
       setIsBemDialogOpen(true)
     }, [])
 
-    /* ─── generateDescricao ─── */
+  
 
     const generateDescricao = useCallback(() => {
       setBemForm((prev) => {
         const { grupo: g, codigo: c } = prev
         let desc = ""
+        const label = CODIGOS_BENS[g]?.[c] || "Bem/Direito"
+        
         if (g === "01") {
-          desc = `${CODIGOS_BENS[g]?.[c] || "Bem Imóvel"}. IPTU: ${prev.iptu || "Não informado"}. `
+          desc = `${label.toUpperCase()}. `
+          if (prev.iptu) desc += `Inscrição Municipal (IPTU): ${prev.iptu}. `
           if (prev.dataAquisicao) desc += `Adquirido em ${formatDate(prev.dataAquisicao)}. `
-          desc += `Área: ${prev.areaTotal || "0"}${prev.areaUnidade}. `
-          desc += prev.registradoCartorio
-            ? `Registrado no Cartório ${prev.cartorioNome || "N/A"}, Matrícula ${prev.cartorioMatricula || "N/A"}. `
-            : "Não registrado em cartório até o momento. "
+          if (prev.areaTotal) desc += `Área total de ${prev.areaTotal}${prev.areaUnidade}. `
+          if (prev.registradoCartorio) {
+            desc += `Registrado no Cartório ${prev.cartorioNome || "---"}, sob a Matrícula nº ${prev.cartorioMatricula || "---"}. `
+          } else {
+            desc += "Imóvel ainda não registrado em cartório. "
+          }
         } else if (g === "02" && c === "01") {
-          desc = `VEÍCULO: ${CODIGOS_BENS[g]?.[c]}. RENAVAM: ${prev.renavam || "N/A"}. PLACA: ${prev.placa || "N/A"}. `
+          desc = `VEÍCULO AUTOMOTOR: ${label}. `
+          if (prev.renavam) desc += `RENAVAM: ${prev.renavam}. `
+          if (prev.placa) desc += `PLACA: ${prev.placa.toUpperCase()}. `
         } else if (["03", "04", "06", "07"].includes(g)) {
-          desc = `${CODIGOS_BENS[g]?.[c] || "Ativo Financeiro"}. INSTITUIÇÃO: ${prev.nomeInst || "N/A"} (CNPJ: ${prev.cnpjInst || "N/A"}). `
-          if (prev.agencia) desc += `AG: ${prev.agencia} `
-          if (prev.conta) desc += `CC: ${prev.conta}-${prev.digito || "0"}. `
+          desc = `${label.toUpperCase()}. `
+          if (prev.nomeInst) desc += `Instituição: ${prev.nomeInst}. `
+          if (prev.cnpjInst) desc += `CNPJ: ${prev.cnpjInst}. `
+          if (prev.agencia) desc += `Agência: ${prev.agencia}. `
+          if (prev.conta) desc += `Conta: ${prev.conta}${prev.digito ? "-" + prev.digito : ""}. `
         }
+        
+        if (!desc) desc = `${label}. `
+        
         return { ...prev, descricao: desc.trim() }
       })
     }, [])
@@ -663,10 +683,14 @@ export const ContribuinteDetails = React.memo(
           ? `/api/declaracoes/${declaracaoId}/bens/${editingBem.id}`
           : `/api/declaracoes/${declaracaoId}/bens`
 
+        const { grupo, codigo, descricao, valorAnterior, valorAtual, ...extras } = bemForm
         const payload = {
-          ...bemForm,
-          valorAnterior: parseBRLToNumber(bemForm.valorAnterior),
-          valorAtual: parseBRLToNumber(bemForm.valorAtual),
+          grupo,
+          codigo,
+          descricao,
+          valorAnterior: parseBRLToNumber(valorAnterior),
+          valorAtual: parseBRLToNumber(valorAtual),
+          detalhes: extras
         }
 
         const res = await fetch(url, {
@@ -709,7 +733,10 @@ export const ContribuinteDetails = React.memo(
       setExportando(true)
       try {
         const res = await fetch(`/api/declaracoes/${declaracaoId}/exportar/pdf`)
-        if (!res.ok) throw new Error("Erro ao gerar PDF")
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData?.error || errData?.message || "Erro ao gerar PDF")
+        }
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
         const a = document.createElement("a")
@@ -997,7 +1024,10 @@ export const ContribuinteDetails = React.memo(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ anoExercicio, tipo: "O", formato }),
         })
-        if (!res.ok) throw new Error("Erro ao exportar")
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData?.error || errData?.message || "Erro ao exportar")
+        }
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
         const a = document.createElement("a")
@@ -1010,6 +1040,22 @@ export const ContribuinteDetails = React.memo(
         toast.error(e.message || "Erro na exportação")
       } finally {
         setExportando(false)
+      }
+    }
+
+    async function handleFinalizar() {
+      if (!declaracaoId || !declaration) return
+      const novaSituacao = declaration.situacao === "transmitida" ? "em_preenchimento" : "transmitida"
+      setFinalizando(true)
+      try {
+        await declaracaoIrpfService.updateStatus(declaracaoId, novaSituacao)
+        toast.success(novaSituacao === "transmitida" ? "Auditoria finalizada com sucesso!" : "Auditoria reaberta.")
+        onDataRefresh?.()
+        setIsFinalizeDialogOpen(false)
+      } catch (e: any) {
+        toast.error("Erro ao atualizar status: " + e.message)
+      } finally {
+        setFinalizando(false)
       }
     }
 
@@ -1061,25 +1107,56 @@ export const ContribuinteDetails = React.memo(
                     </div>
                   </div>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 rounded-xl font-bold border-muted-foreground/20 hover:bg-primary/5 transition-all group">
-                      {exportando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4 text-primary group-hover:scale-110 transition-transform" />}
-                      EXPORTAR
+                <div className="flex items-center gap-3">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-9 rounded-xl font-bold border-muted-foreground/20 hover:bg-primary/5 transition-all group">
+                        {exportando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4 text-primary group-hover:scale-110 transition-transform" />}
+                        EXPORTAR
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64 rounded-xl border-white/20 bg-background/80 backdrop-blur-md">
+                      <DropdownMenuItem onClick={() => handleExportar("posicional")} className="cursor-pointer font-bold gap-3 py-2.5">
+                        <Layout className="h-4 w-4 text-purple-600" /> 
+                        <div className="flex flex-col">
+                          <span>Importação PGD (.DEC)</span>
+                          <span className="text-[9px] text-muted-foreground font-normal">Layout DIRP - Funciona s/ XML</span>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExportar("dec")} className="cursor-pointer font-bold gap-3 py-2.5">
+                        <Archive className="h-4 w-4 text-blue-600" />
+                        <div className="flex flex-col">
+                          <span>Pacote PGD (.DEC)</span>
+                          <span className="text-[9px] text-muted-foreground font-normal">Requer XML Original</span>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExportar("xml")} className="cursor-pointer font-bold gap-3 py-2.5">
+                        <FileCode className="h-4 w-4 text-orange-600" />
+                        <div className="flex flex-col">
+                          <span>Arquivo XML (.xml)</span>
+                          <span className="text-[9px] text-muted-foreground font-normal">Requer XML Original</span>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleExportarPdf} className="cursor-pointer font-black gap-3 py-3 text-emerald-600">
+                        <FileDown className="h-4 w-4" /> Dossiê PDF Completo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {declaration && (
+                    <Button 
+                      variant={declaration.situacao === "transmitida" ? "secondary" : "default"}
+                      size="sm" 
+                      className="h-9 rounded-xl font-black text-[10px] uppercase tracking-widest gap-2 shadow-lg shadow-primary/10"
+                      onClick={() => setIsFinalizeDialogOpen(true)}
+                      disabled={finalizando}
+                    >
+                      {finalizando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : declaration.situacao === "transmitida" ? <X className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      {declaration.situacao === "transmitida" ? "Reabrir Auditoria" : "Finalizar Auditoria"}
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56 rounded-xl border-white/20 bg-background/80 backdrop-blur-md">
-                    <DropdownMenuItem onClick={() => handleExportar("posicional")} className="cursor-pointer font-bold gap-2">
-                      <FileText className="h-4 w-4 text-primary" /> Arquivo .DEC (Layout RFB)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExportar("xml")} className="cursor-pointer font-bold gap-2 text-xs">
-                      <FileCode className="h-3.5 w-3.5 text-primary" /> XML Bruto
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportarPdf} className="cursor-pointer font-bold gap-2 text-xs text-emerald-600">
-                      <FileDown className="h-3.5 w-3.5" /> Dossiê PDF Completo
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  )}
+                </div>
               </div>
             </CardHeader>
           </Card>
@@ -1676,13 +1753,13 @@ export const ContribuinteDetails = React.memo(
       </div>
     </DialogHeader>
 
-    {/* BODY */}
     <div
       className="
         flex-1
-        overflow-hidden
+        overflow-y-auto
         px-6
         py-5
+        scrollbar-thin scrollbar-thumb-primary/10 hover:scrollbar-thumb-primary/20
       "
     >
       <div
@@ -2006,10 +2083,40 @@ export const ContribuinteDetails = React.memo(
     </DialogFooter>
   </DialogContent>
 </Dialog>
-        </div>
+        <AlertDialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
+          <AlertDialogContent className="rounded-[2rem] border-primary/10 shadow-2xl overflow-hidden">
+            <AlertDialogHeader className="p-8 pb-4">
+              <AlertDialogTitle className="text-2xl font-black tracking-tight">
+                {declaration?.situacao === "transmitida" ? "Reabrir Auditoria?" : "Finalizar Auditoria?"}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm font-bold text-muted-foreground/70 leading-relaxed">
+                {declaration?.situacao === "transmitida" 
+                  ? "Ao reabrir, você poderá editar todos os campos e documentos. O status da declaração voltará para 'Em Andamento'." 
+                  : "Isso marcará o dossiê como concluído. O status da declaração mudará para 'Finalizada' na listagem geral."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="p-8 pt-4 bg-muted/30 gap-3">
+              <AlertDialogCancel className="h-12 flex-1 rounded-2xl font-bold uppercase text-[10px] tracking-widest border-muted-foreground/10 hover:bg-background transition-all">
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleFinalizar();
+                }}
+                className="h-12 flex-1 rounded-2xl font-black uppercase text-[11px] tracking-widest bg-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+                disabled={finalizando}
+              >
+                {finalizando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                Confirmar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
-    )
-  }
+    </div>
+  )
+}
 )
 
 ContribuinteDetails.displayName = "ContribuinteDetails"

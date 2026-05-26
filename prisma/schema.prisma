@@ -153,6 +153,7 @@ model BemDireito {
   localizacao   String?    @db.VarChar(10)
   valorAnterior Decimal    @default(0.00) @map("valor_anterior") @db.Decimal(15, 2)
   valorAtual    Decimal    @default(0.00) @map("valor_atual") @db.Decimal(15, 2)
+  detalhes      Json?
   createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
   declaracao    Declaracao @relation(fields: [declaracaoId], references: [id], onDelete: Cascade)
 

@@ -188,6 +188,12 @@ export const declaracaoIrpfService = {
   getChecklist(declaracaoId: number) {
     return unwrap<Checklist>(api.get(`/declaracoes/${declaracaoId}/checklist`));
   },
+
+  updateStatus(declaracaoId: number, situacao: string) {
+    return unwrap<{ message: string; declaracao: any }>(
+      api.patch(`/declaracoes/${declaracaoId}`, { situacao })
+    );
+  },
 };
 
 export const configuracaoService = {

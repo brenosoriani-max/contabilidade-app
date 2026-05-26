@@ -54,6 +54,7 @@ export interface FilterParams {
   exercicio?: string;
   resultado?: string;
   uf?: string;
+  situacao?: string;
   page?: number;
   limit?: number;
 }
@@ -134,6 +135,7 @@ export interface BemDireito {
   localizacao: string | null;
   valorAnterior: number | string;
   valorAtual: number | string;
+  detalhes?: any;
   createdAt: string;
 }
 

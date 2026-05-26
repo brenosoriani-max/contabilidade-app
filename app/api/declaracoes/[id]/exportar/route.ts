@@ -55,7 +55,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: 'Declaracao nao apta a exportacao',
+          error: 'Declaração não apta a exportação',
           data: {
             erros: validacao.erros_impeditivos,
             avisos: validacao.avisos,
@@ -64,17 +64,6 @@ export async function POST(
         { status: 422 }
       );
     }
-
-    let xmlConteudo = decl.xmlOriginal?.trim();
-    if (!xmlConteudo) {
-      return fail(
-        'Nao ha XML original gravado nesta declaracao. Importe o XML (importacao em massa ou reimporte na tela IRPF).',
-        422
-      );
-    }
-
-    // SYNC: Apply changes from Modelo (Database) back into the XML string
-    xmlConteudo = mergeModeloBackIntoXml(xmlConteudo, modelo);
 
     const anoExercicio =
       typeof body.anoExercicio === 'number' && Number.isFinite(body.anoExercicio)
@@ -104,23 +93,35 @@ export async function POST(
       });
     }
 
+    if (formato === 'posicional') {
+      const posicionalConteudo = generatePositionalIRPF(modelo);
+      const bufferLatin1 = Buffer.from(posicionalConteudo, 'latin1');
+      return new NextResponse(bufferLatin1, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=iso-8859-1',
+          'Content-Disposition': `attachment; filename="${nomeBase}.DEC"`,
+        },
+      });
+    }
+
+    let xmlConteudo = decl.xmlOriginal?.trim();
+    if (!xmlConteudo) {
+      return fail(
+        'Não há XML original gravado nesta declaração. Para gerar arquivos .XML ou pacote .DEC, é necessário ter importado um XML anteriormente. Use a opção "Importação DIRP (.DEC)" que funciona apenas com os dados do sistema.',
+        422
+      );
+    }
+
+    // SYNC: Apply changes from Modelo (Database) back into the XML string
+    xmlConteudo = mergeModeloBackIntoXml(xmlConteudo, modelo);
+
     if (formato === 'xml') {
       return new NextResponse(xmlConteudo, {
         status: 200,
         headers: {
           'Content-Type': 'application/xml; charset=utf-8',
           'Content-Disposition': `attachment; filename="${nomeBase}.xml"`,
-        },
-      });
-    }
-
-    if (formato === 'posicional') {
-      const posicionalConteudo = generatePositionalIRPF(modelo);
-      return new NextResponse(posicionalConteudo, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/plain; charset=iso-8859-1',
-          'Content-Disposition': `attachment; filename="${nomeBase}.DEC"`,
         },
       });
     }

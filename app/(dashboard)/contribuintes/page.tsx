@@ -82,6 +82,8 @@ import {
   formatCurrency,
   getResultColor,
   getResultLabel,
+  getPipelineStatusColor,
+  getPipelineStatusLabel,
 } from "@/lib/format"
 
 import type {
@@ -142,6 +144,13 @@ function fallbackDeclaration(
   }
 }
 
+function getProcessStatus(declaration: Declaration): string {
+  if (declaration.exercicio === "-") return "nao_iniciada";
+  if (declaration.situacao) return declaration.situacao;
+  if ((declaration.percentualCompleto || 0) >= 100) return "finalizada";
+  return "em_preenchimento";
+}
+
 export default function ContribuintesPage() {
   const router = useRouter()
 
@@ -154,6 +163,9 @@ export default function ContribuintesPage() {
     useState("all")
 
   const [ufFilter, setUfFilter] =
+    useState("all")
+
+  const [statusFilter, setStatusFilter] =
     useState("all")
 
   const [deleteConfirm, setDeleteConfirm] =
@@ -184,8 +196,12 @@ export default function ContribuintesPage() {
               : resultadoFilter,
           uf:
             ufFilter === "all"
+               ? undefined
+               : ufFilter,
+          situacao:
+            statusFilter === "all"
               ? undefined
-              : ufFilter,
+              : statusFilter,
           page: 1,
           limit: 100,
         }),
@@ -417,6 +433,43 @@ export default function ContribuintesPage() {
                 </Select>
               </div>
 
+              <div className="w-full md:w-44">
+                <label className="mb-1.5 block text-sm font-medium">
+                  Etapa
+                </label>
+
+                <Select
+                  value={statusFilter}
+                  onValueChange={setStatusFilter}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem value="all">
+                      Todas
+                    </SelectItem>
+
+                    <SelectItem value="nao_iniciada">
+                      Não Iniciada
+                    </SelectItem>
+
+                    <SelectItem value="em_preenchimento">
+                      Em Andamento
+                    </SelectItem>
+
+                    <SelectItem value="transmitida">
+                      Finalizada
+                    </SelectItem>
+
+                    <SelectItem value="malha">
+                      Em Malha
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -424,6 +477,7 @@ export default function ContribuintesPage() {
                   setSearchInput("")
                   setResultadoFilter("all")
                   setUfFilter("all")
+                  setStatusFilter("all")
                 }}
               >
                 <X className="mr-1 h-4 w-4" />
@@ -471,7 +525,11 @@ export default function ContribuintesPage() {
               </TableHead>
 
               <TableHead className="h-14 px-6 text-center font-semibold">
-                Status
+                Etapa
+              </TableHead>
+
+              <TableHead className="h-14 px-6 text-center font-semibold">
+                Resultado
               </TableHead>
 
               <TableHead className="w-[80px]" />
@@ -482,7 +540,7 @@ export default function ContribuintesPage() {
             {declarations.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="h-32 text-center text-muted-foreground"
                 >
                   Nenhum contribuinte encontrado
@@ -532,9 +590,21 @@ export default function ContribuintesPage() {
 
                   <TableCell className="px-6 text-center">
                     <Badge
+                      className={`${getPipelineStatusColor(
+                        getProcessStatus(declaration)
+                      )} px-3 py-1 rounded-full border shadow-none font-bold text-[10px] uppercase`}
+                    >
+                      {getPipelineStatusLabel(
+                        getProcessStatus(declaration)
+                      )}
+                    </Badge>
+                  </TableCell>
+
+                  <TableCell className="px-6 text-center">
+                    <Badge
                       className={`${getResultColor(
                         declaration.resultadoDeclaracao
-                      )} px-3 py-1 rounded-full`}
+                      )} px-3 py-1 rounded-full border shadow-none font-bold text-[10px] uppercase`}
                     >
                       {getResultLabel(
                         declaration.resultadoDeclaracao

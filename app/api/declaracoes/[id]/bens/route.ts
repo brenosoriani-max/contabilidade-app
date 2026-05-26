@@ -39,7 +39,7 @@ export async function POST(
     const declaracaoId = Number.parseInt(id, 10);
     const body = await request.json();
 
-    const { grupo, codigo, descricao, valorAnterior, valorAtual } = body;
+    const { grupo, codigo, descricao, valorAnterior, valorAtual, detalhes } = body;
 
     const bem = await prisma.bemDireito.create({
       data: {
@@ -49,6 +49,7 @@ export async function POST(
         descricao,
         valorAnterior: Number(valorAnterior || 0),
         valorAtual: Number(valorAtual || 0),
+        detalhes: detalhes || {},
       },
     });
 

@@ -161,3 +161,45 @@ export function maskBRL(value: string): string {
 export function parseBRLToNumber(value: string): number {
   return Number(value.replace(/\D/g, "")) / 100;
 }
+
+export function getPipelineStatusLabel(status: string | null | undefined): string {
+  if (!status) return "Não Iniciada"
+  const s = status.toLowerCase()
+  switch (s) {
+    case "nao_iniciada":
+      return "Não Iniciada"
+    case "em_preenchimento":
+      return "Em Andamento"
+    case "transmitida":
+    case "processada":
+    case "finalizada":
+    case "concluido":
+      return "Finalizada"
+    case "pendente":
+    case "malha":
+      return "Pendente / Malha"
+    default:
+      return "Em Andamento"
+  }
+}
+
+export function getPipelineStatusColor(status: string | null | undefined): string {
+  if (!status) return "text-slate-500 bg-slate-100 border-slate-200"
+  const s = status.toLowerCase()
+  switch (s) {
+    case "nao_iniciada":
+      return "text-slate-500 bg-slate-100 border-slate-200"
+    case "em_preenchimento":
+      return "text-amber-600 bg-amber-50 border-amber-200"
+    case "transmitida":
+    case "processada":
+    case "finalizada":
+    case "concluido":
+      return "text-emerald-600 bg-emerald-50 border-emerald-200"
+    case "pendente":
+    case "malha":
+      return "text-red-600 bg-red-50 border-red-200"
+    default:
+      return "text-amber-600 bg-amber-50 border-amber-200"
+  }
+}
