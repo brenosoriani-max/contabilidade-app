@@ -193,21 +193,28 @@ const CODIGOS_BENS: Record<string, Record<string, string>> = {
     "99": "Outros bens imóveis",
   },
   "02": {
-    "01": "Veículo automotor terrestre (carro, moto, etc)",
+    "01": "Veículo automotor terrestre",
     "02": "Aeronave",
     "03": "Embarcação",
     "99": "Outros bens móveis",
   },
   "03": {
-    "01": "Ações (inclusive as provenientes de linha telefônica)",
+    "01": "Ações",
     "02": "Quotas ou quinhões de capital",
     "99": "Outras participações societárias",
   },
   "04": {
     "01": "Caderneta de poupança",
-    "02": "Ativos financeiros (Tesouro Direto, CDB, RDB, etc)",
+    "02": "Ativos financeiros",
     "03": "Títulos públicos e privados sujeitos a tributação",
     "99": "Outras aplicações e investimentos",
+  },
+  "05": {
+    "01": "Crédito com pessoa física",
+    "02": "Crédito com pessoa jurídica",
+    "03": "Empréstimos concedidos",
+    "04": "Adiantamentos a terceiros",
+    "99": "Outros créditos",
   },
   "06": {
     "01": "Depósito em conta corrente no País",
@@ -215,9 +222,9 @@ const CODIGOS_BENS: Record<string, Record<string, string>> = {
     "99": "Outros depósitos à vista e numerário",
   },
   "07": {
-    "01": "Fundos de Investimento Imobiliário (FII)",
-    "02": "Fundos de Investimento em Ações (FIA)",
-    "03": "Fundos de Investimento em Índice de Mercado (ETF)",
+    "01": " Investimento Imobiliário",
+    "02": " Investimento em Ações",
+    "03": " Investimento em Índice de Mercado",
     "99": "Outros fundos",
   },
   "08": {
@@ -226,6 +233,9 @@ const CODIGOS_BENS: Record<string, Record<string, string>> = {
     "03": "Stablecoins",
     "10": "NFTs",
     "99": "Outros criptoativos",
+  },
+  "09": {
+    "01": "Outros bens e direitos",
   },
 }
 
@@ -403,25 +413,35 @@ const SecaoInstituicao = memo(
   ({ form, onChange }: { form: BemForm; onChange: ChangeHandler }) => (
     <div className="bg-primary/[0.02] p-6 rounded-[2rem] border border-primary/10 animate-in fade-in slide-in-from-top-2 duration-200">
       <SectionTitle icon={<CreditCard className="h-3.5 w-3.5" />} label="Dados da Instituição / Empresa" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <FieldGroup label="CNPJ">
-          <Input placeholder="00.000.000/0000-00" className={inputCls} value={form.cnpjInst} onChange={onChange("cnpjInst")} />
-        </FieldGroup>
-        <FieldGroup label="Nome da Instituição">
-          <Input placeholder="Ex: Banco Itaú S.A." className={inputCls} value={form.nomeInst} onChange={onChange("nomeInst")} />
-        </FieldGroup>
-        <div className="md:col-span-2 grid grid-cols-3 gap-4">
-          <FieldGroup label="Agência" small>
-            <Input className={inputSmCls} value={form.agencia} onChange={onChange("agencia")} />
-          </FieldGroup>
-          <FieldGroup label="Conta" small>
-            <Input className={inputSmCls} value={form.conta} onChange={onChange("conta")} />
-          </FieldGroup>
-          <FieldGroup label="DV" small>
-            <Input className={inputSmCls} value={form.digito} onChange={onChange("digito")} />
-          </FieldGroup>
-        </div>
-      </div>
+      <div className="md:col-span-2 grid grid-cols-3 gap-4">
+  <FieldGroup label="Agência" small>
+    <Input
+      className={inputSmCls}
+      value={form.agencia}
+      onChange={onChange("agencia")}
+      placeholder="0000"
+      autoComplete="off"
+    />
+  </FieldGroup>
+  <FieldGroup label="Conta" small>
+    <Input
+      className={inputSmCls}
+      value={form.conta}
+      onChange={onChange("conta")}
+      placeholder="00000"
+      autoComplete="off"
+    />
+  </FieldGroup>
+  <FieldGroup label="DV" small>
+    <Input
+      className={inputSmCls}
+      value={form.digito}
+      onChange={onChange("digito")}
+      placeholder="0"
+      autoComplete="off"
+    />
+  </FieldGroup>
+</div>
     </div>
   )
 )
@@ -1670,7 +1690,6 @@ export const ContribuinteDetails = React.memo(
               </Card>
             </TabsContent>
 
-            {/* ── AGENDAMENTOS ── */}
             <TabsContent value="agendamentos">
               <Card className="border-none shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm">
                 <CardHeader className="bg-muted/5 border-b py-6">
@@ -1733,8 +1752,7 @@ export const ContribuinteDetails = React.memo(
         <Dialog open={isBemDialogOpen} onOpenChange={setIsBemDialogOpen}>
   <DialogContent
     className="
-      w-[95vw]
-      max-w-5xl
+      w-[300vw]
       h-[92vh]
       overflow-hidden
       rounded-[2rem]
@@ -1905,7 +1923,7 @@ export const ContribuinteDetails = React.memo(
                 >
                   <SelectTrigger
                     className="
-                      h-12
+                      h-10
                       rounded-2xl
                       border-muted-foreground/10
                       bg-background
