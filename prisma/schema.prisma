@@ -209,9 +209,9 @@ model Agendamento {
   updatedAt       DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
   contribuinte    Contribuinte?          @relation(fields: [contribuinteId], references: [id])
   usuario         Usuario?               @relation(fields: [usuarioId], references: [id])
-  checklist        ChecklistAgendamento[]
+  checklist       ChecklistAgendamento[]
   documentos      DocumentoAgendamento[]
-  envioLink        LinkEnvioAgendamento?
+  envioLink       LinkEnvioAgendamento?
 
   @@index([dataAgendamento], map: "idx_agendamentos_data")
   @@index([contribuinteId], map: "agendamentos_contribuinte_id_fkey")
@@ -220,15 +220,15 @@ model Agendamento {
 }
 
 model ChecklistAgendamento {
-  id            Int                     @id @default(autoincrement())
-  agendamentoId Int                     @map("agendamento_id")
-  chave         String                  @db.VarChar(80)
-  nome          String                  @db.VarChar(255)
+  id            Int                      @id @default(autoincrement())
+  agendamentoId Int                      @map("agendamento_id")
+  chave         String                   @db.VarChar(80)
+  nome          String                   @db.VarChar(255)
   status        StatusChecklistDocumento @default(pendente)
-  ordem         Int                     @default(0)
-  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt     DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
-  agendamento   Agendamento             @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
+  ordem         Int                      @default(0)
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt     DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  agendamento   Agendamento              @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
   documentos    DocumentoAgendamento[]
 
   @@unique([agendamentoId, chave], map: "unique_checklist_agendamento_chave")
@@ -237,18 +237,18 @@ model ChecklistAgendamento {
 }
 
 model DocumentoAgendamento {
-  id              Int                    @id @default(autoincrement())
-  agendamentoId   Int                    @map("agendamento_id")
-  checklistItemId Int?                   @map("checklist_item_id")
+  id               Int                   @id @default(autoincrement())
+  agendamentoId    Int                   @map("agendamento_id")
+  checklistItemId  Int?                  @map("checklist_item_id")
   checklistItemKey String?               @map("checklist_item_key") @db.VarChar(80)
-  nomeArquivo     String                 @map("nome_arquivo") @db.VarChar(255)
-  tipoArquivo     String?                @map("tipo_arquivo") @db.VarChar(100)
-  tamanhoBytes    Int?                   @map("tamanho_bytes")
-  caminhoArquivo  String?                @map("caminho_arquivo") @db.VarChar(500)
-  urlArquivo      String?                @map("url_arquivo") @db.VarChar(500)
-  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamp(0)
-  agendamento     Agendamento            @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
-  checklistItem   ChecklistAgendamento?  @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  nomeArquivo      String                @map("nome_arquivo") @db.VarChar(255)
+  tipoArquivo      String?               @map("tipo_arquivo") @db.VarChar(100)
+  tamanhoBytes     Int?                  @map("tamanho_bytes")
+  caminhoArquivo   String?               @map("caminho_arquivo") @db.VarChar(500)
+  urlArquivo       String?               @map("url_arquivo") @db.VarChar(500)
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  agendamento      Agendamento           @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
+  checklistItem    ChecklistAgendamento? @relation(fields: [checklistItemId], references: [id])
 
   @@index([agendamentoId], map: "documentos_agendamento_agendamento_id_fkey")
   @@index([checklistItemId], map: "documentos_agendamento_checklist_item_id_fkey")
