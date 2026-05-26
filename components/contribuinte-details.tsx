@@ -850,7 +850,7 @@ export const ContribuinteDetails = React.memo(
         { label: "Data de Nascimento", ok: !!contribuinte.dataNascimento, value: formatDate(contribuinte.dataNascimento), category: "Dados Pessoais", type: "data", fieldId: "identificacao.data_nascimento" },
         { label: "Título de Eleitor", ok: !!contribuinte.tituloEleitor, value: contribuinte.tituloEleitor, category: "Documentos", type: "doc", fieldId: "identificacao.titulo_eleitor" },
         { label: "Endereço Completo", ok: !!(contribuinte.enderecoLogradouro && contribuinte.enderecoMunicipio), value: contribuinte.enderecoLogradouro ? `${contribuinte.enderecoLogradouro}, ${contribuinte.enderecoMunicipio}` : null, category: "Dados Pessoais", type: "data", fieldId: "endereco.logradouro" },
-        { label: "RG / CNH", ok: !!contribuinte.dataNascimento, value: "Documento Identidade", category: "Documentos", type: "doc", fieldId: "identificacao.rg" },
+        { label: "RG / CNH", ok: false, value: "Documento Identidade", category: "Documentos", type: "doc", fieldId: "identificacao.rg" },
         { label: "Informe de Rendimentos", ok: Number(declaration?.totalRendPJ) > 0, value: declaration?.totalRendPJ ? formatCurrency(declaration.totalRendPJ) : null, category: "Financeiro", type: "doc", fieldId: "rendimentos.pj" },
         { label: "Bens e Direitos", ok: assets.length > 0, value: `${assets.length} itens lançados`, category: "Patrimônio", type: "data", fieldId: "bens" },
         { label: "Contato (Tel/Email)", ok: !!(contribuinte.telefone || contribuinte.email), value: contribuinte.email || contribuinte.telefone, category: "Dados Pessoais", type: "data", fieldId: "contato.email" },
