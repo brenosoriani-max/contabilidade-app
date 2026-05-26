@@ -237,6 +237,7 @@ interface BemForm {
   descricao: string
   valorAnterior: string
   valorAtual: string
+  // Imóveis
   iptu: string
   dataAquisicao: string
   areaTotal: string
@@ -244,13 +245,20 @@ interface BemForm {
   registradoCartorio: boolean
   cartorioNome: string
   cartorioMatricula: string
+  // Veículos
   renavam: string
   placa: string
+  // Instituições / Empresas
   cnpjInst: string
   nomeInst: string
   agencia: string
   conta: string
   digito: string
+  // Criptoativos
+  siglaMoeda: string
+  quantidade: string
+  exchange: string
+  custodiaPropria: boolean
 }
 
 const EMPTY_BEM_FORM: BemForm = {
@@ -273,6 +281,10 @@ const EMPTY_BEM_FORM: BemForm = {
   agencia: "",
   conta: "",
   digito: "",
+  siglaMoeda: "",
+  quantidade: "",
+  exchange: "",
+  custodiaPropria: false,
 }
 
 
@@ -414,6 +426,55 @@ const SecaoInstituicao = memo(
   )
 )
 SecaoInstituicao.displayName = "SecaoInstituicao"
+
+const SecaoCripto = memo(
+  ({
+    form,
+    onChange,
+    onCheckbox,
+  }: {
+    form: BemForm
+    onChange: ChangeHandler
+    onCheckbox: CheckboxHandler
+  }) => (
+    <div className="bg-primary/[0.02] p-6 rounded-[2rem] border border-primary/10 animate-in fade-in slide-in-from-top-2 duration-200">
+      <SectionTitle icon={<Sparkles className="h-3.5 w-3.5" />} label="Detalhes do Criptoativo" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <FieldGroup label="Sigla (Ex: BTC, ETH)">
+          <Input placeholder="BTC" className={cn(inputCls, "uppercase")} value={form.siglaMoeda} onChange={onChange("siglaMoeda")} />
+        </FieldGroup>
+        <FieldGroup label="Quantidade">
+          <Input placeholder="0,00000000" className={inputCls} value={form.quantidade} onChange={onChange("quantidade")} />
+        </FieldGroup>
+        <div className="md:col-span-2 space-y-4">
+          <label className="flex items-center gap-3 bg-background px-4 py-3 rounded-xl border border-muted cursor-pointer group w-fit">
+            <Checkbox
+              id="custodia"
+              checked={!!form.custodiaPropria}
+              onCheckedChange={onCheckbox("custodiaPropria")}
+              className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+            />
+            <span className="text-[10px] font-black uppercase tracking-wider group-hover:text-primary transition-colors">
+              Custódia Própria (Wallet)?
+            </span>
+          </label>
+
+          {!form.custodiaPropria && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in zoom-in-95 duration-150">
+              <FieldGroup label="Exchange / Corretora" colSpan="md:col-span-1">
+                <Input placeholder="Ex: Binance, Mercado Bitcoin" className={inputCls} value={form.exchange} onChange={onChange("exchange")} />
+              </FieldGroup>
+              <FieldGroup label="CNPJ da Corretora (se nacional)">
+                <Input placeholder="00.000.000/0000-00" className={inputCls} value={form.cnpjInst} onChange={onChange("cnpjInst")} />
+              </FieldGroup>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+)
+SecaoCripto.displayName = "SecaoCripto"
 
 
 function StatCard({ title, value, icon }: { title: string; value: string; icon: ReactNode }) {
@@ -656,6 +717,15 @@ export const ContribuinteDetails = React.memo(
           desc = `VEÍCULO AUTOMOTOR: ${label}. `
           if (prev.renavam) desc += `RENAVAM: ${prev.renavam}. `
           if (prev.placa) desc += `PLACA: ${prev.placa.toUpperCase()}. `
+        } else if (g === "08") {
+          desc = `${label.toUpperCase()}: ${prev.siglaMoeda.toUpperCase()}. `
+          if (prev.quantidade) desc += `Quantidade: ${prev.quantidade}. `
+          if (prev.custodiaPropria) {
+            desc += "Custódia própria em carteira digital (Wallet). "
+          } else {
+            if (prev.exchange) desc += `Custodiado na Exchange ${prev.exchange}. `
+            if (prev.cnpjInst) desc += `CNPJ: ${prev.cnpjInst}. `
+          }
         } else if (["03", "04", "06", "07"].includes(g)) {
           desc = `${label.toUpperCase()}. `
           if (prev.nomeInst) desc += `Instituição: ${prev.nomeInst}. `
@@ -1064,6 +1134,7 @@ export const ContribuinteDetails = React.memo(
     const showImovel = bemForm.grupo === "01"
     const showVeiculo = bemForm.grupo === "02" && bemForm.codigo === "01"
     const showInst = ["03", "04", "06", "07"].includes(bemForm.grupo)
+    const showCripto = bemForm.grupo === "08"
 
     return (
       <div className="space-y-6">
@@ -1766,8 +1837,8 @@ export const ContribuinteDetails = React.memo(
         className="
           grid
           grid-cols-1
-          xl:grid-cols-2
-          gap-5
+          lg:grid-cols-2
+          gap-8
           h-full
         "
       >
@@ -1811,7 +1882,7 @@ export const ContribuinteDetails = React.memo(
                     <SelectValue />
                   </SelectTrigger>
 
-                  <SelectContent className="rounded-2xl">
+                  <SelectContent className="rounded-2xl" position="popper" sideOffset={4}>
                     {Object.entries(GRUPOS_BENS).map(
                       ([id, label]) => (
                         <SelectItem
@@ -1845,7 +1916,7 @@ export const ContribuinteDetails = React.memo(
                     <SelectValue />
                   </SelectTrigger>
 
-                  <SelectContent className="rounded-2xl max-h-[260px]">
+                  <SelectContent className="rounded-2xl max-h-[260px]" position="popper" sideOffset={4}>
                     {Object.entries(
                       CODIGOS_BENS[bemForm.grupo] ?? {
                         "99": "Outros",
@@ -1891,6 +1962,14 @@ export const ContribuinteDetails = React.memo(
               <SecaoInstituicao
                 form={bemForm}
                 onChange={handleBemChange}
+              />
+            )}
+
+            {showCripto && (
+              <SecaoCripto
+                form={bemForm}
+                onChange={handleBemChange}
+                onCheckbox={handleBemCheckbox}
               />
             )}
           </div>

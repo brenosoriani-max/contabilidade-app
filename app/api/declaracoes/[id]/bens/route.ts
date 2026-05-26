@@ -49,7 +49,7 @@ export async function POST(
         descricao,
         valorAnterior: Number(valorAnterior || 0),
         valorAtual: Number(valorAtual || 0),
-       
+     
       },
     });
 

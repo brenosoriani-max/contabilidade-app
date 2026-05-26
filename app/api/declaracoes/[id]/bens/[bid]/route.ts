@@ -27,7 +27,8 @@ export async function PUT(
         descricao,
         valorAnterior: Number(valorAnterior || 0),
         valorAtual: Number(valorAtual || 0),
-      },
+        detalhes: detalhes || {},
+      } as any,
     });
 
     return ok({ bem, message: 'Bem atualizado com sucesso' });
