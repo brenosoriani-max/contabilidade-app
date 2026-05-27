@@ -44,6 +44,10 @@ export function mapDeclaration(declaracao: any): Declaration {
     (sum: number, item: any) => sum + toNumber(item.valorIrrf),
     0
   );
+  const totalRendimentosTributaveis = rendimentos.reduce(
+    (sum: number, item: any) => sum + toNumber(item.valorRendimento),
+    0
+  );
   const totalPrevOficial = rendimentos.reduce(
     (sum: number, item: any) => sum + toNumber(item.valorPrevidencia),
     0
@@ -54,6 +58,10 @@ export function mapDeclaration(declaracao: any): Declaration {
   );
   const totalBensAnterior = bens.reduce(
     (sum: number, item: any) => sum + toNumber(item.valorAnterior),
+    0
+  );
+  const totalBensAtual = bens.reduce(
+    (sum: number, item: any) => sum + toNumber(item.valorAtual),
     0
   );
   const totalDividasAnterior = dividas.reduce(
@@ -95,7 +103,9 @@ export function mapDeclaration(declaracao: any): Declaration {
     cep: contribuinte?.enderecoCep ?? null,
     ocupacao: contribuinte?.ocupacaoPrincipal ?? null,
     naturezaOcupacao: contribuinte?.naturezaOcupacao ?? null,
-    totalRendPJ: toNumber(declaracao.totalRendimentosTributaveis),
+    totalRendPJ:
+      toNumber(declaracao.totalRendimentosTributaveis) ||
+      totalRendimentosTributaveis,
     totalIRRF,
     totalPrevOficial,
     totalDecimoTerceiro,
@@ -104,7 +114,7 @@ export function mapDeclaration(declaracao: any): Declaration {
     rendAplicacoes: 0,
     ganhosCapital: 0,
     totalBensAnterior,
-    totalBensAtual: toNumber(declaracao.totalBens),
+    totalBensAtual: toNumber(declaracao.totalBens) || totalBensAtual,
     qtdBens: bens.length,
     totalDividasAnterior,
     totalDividasAtual,

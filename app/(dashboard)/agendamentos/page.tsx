@@ -231,7 +231,7 @@ export default function AgendamentosPage() {
   }
 
   function handleUpdatePage(){
-    window.location.reload();
+    void mutate();
   }
 
   function handleEditScheduling(scheduling: Scheduling) {

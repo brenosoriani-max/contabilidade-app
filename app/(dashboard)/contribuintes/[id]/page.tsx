@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -64,6 +65,15 @@ interface ApiResponse {
   rendimentos?: unknown[]
 }
 
+function toNumber(value: unknown) {
+  if (typeof value === "number") return value
+  if (typeof value === "string") return Number(value) || 0
+  if (value && typeof value === "object" && "toString" in value) {
+    return Number((value as { toString: () => string }).toString()) || 0
+  }
+  return 0
+}
+
 export default function ContribuintePage() {
   const params = useParams()
   const router = useRouter()
@@ -80,7 +90,7 @@ export default function ContribuintePage() {
   const [declaration, setDeclaration] = useState<Declaration | null>(null)
   const [assets, setAssets] = useState<BemDireito[]>([])
 
-  async function loadData(isRefresh = false) {
+  const loadData = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) {
         setRefreshing(true)
@@ -99,13 +109,32 @@ export default function ContribuintePage() {
 
       const contribuinteData = payload.contribuinte || null
       const declarationData = payload.declaracoes?.[0] || null
+      const rendimentos = Array.isArray(payload.rendimentos) ? payload.rendimentos : []
+      const rendimentosTotal = rendimentos.reduce<number>(
+        (sum, item) =>
+          sum + toNumber((item as { valorRendimento?: unknown }).valorRendimento),
+        0
+      )
+      const irrfTotal = rendimentos.reduce<number>(
+        (sum, item) =>
+          sum + toNumber((item as { valorIrrf?: unknown }).valorIrrf),
+        0
+      )
 
       if (!contribuinteData) {
         throw new Error("Contribuinte não encontrado")
       }
 
       setContribuinte(contribuinteData)
-      setDeclaration(declarationData)
+      setDeclaration(
+        declarationData
+          ? {
+              ...declarationData,
+              totalRendPJ: Number(declarationData.totalRendPJ) || rendimentosTotal,
+              totalIRRF: Number(declarationData.totalIRRF) || irrfTotal,
+            }
+          : null
+      )
       setAssets(
         Array.isArray(payload.bens)
           ? payload.bens
@@ -118,12 +147,23 @@ export default function ContribuintePage() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [contribuinteId])
 
   useEffect(() => {
     if (!contribuinteId) return
     loadData()
-  }, [contribuinteId])
+  }, [contribuinteId, loadData])
+
+  useEffect(() => {
+    if (!contribuinteId) return
+
+    const refreshAfterMutation = () => {
+      void loadData(true)
+    }
+
+    window.addEventListener("api:mutation", refreshAfterMutation)
+    return () => window.removeEventListener("api:mutation", refreshAfterMutation)
+  }, [contribuinteId, loadData])
 
   return (
     <>

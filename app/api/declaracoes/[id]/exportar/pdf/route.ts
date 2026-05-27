@@ -43,6 +43,21 @@ export async function GET(
         style: 'currency',
         currency: 'BRL',
       }).format(Number(val));
+    const toNumber = (val: any) => Number(val?.toString?.() ?? val) || 0;
+    const totalRendimentos = decl.rendimentosTributaveis.reduce(
+      (sum, item) => sum + toNumber(item.valorRendimento),
+      0
+    );
+    const totalIRRF = decl.rendimentosTributaveis.reduce(
+      (sum, item) => sum + toNumber(item.valorIrrf),
+      0
+    );
+    const totalDecimoTerceiro = decl.rendimentosTributaveis.reduce(
+      (sum, item) => sum + toNumber(item.valor13o),
+      0
+    );
+    const totalRendimentosResumo =
+      toNumber(decl.totalRendimentosTributaveis) || totalRendimentos;
 
     // --- PAGE 1: COVER & SUMMARY ---
     // Header background
@@ -78,9 +93,9 @@ export async function GET(
 
     // Summary Box
     doc.setFillColor(248, 250, 252); // slate-50
-    doc.roundedRect(15, 85, 180, 55, 3, 3, 'F');
+    doc.roundedRect(15, 85, 180, 62, 3, 3, 'F');
     doc.setDrawColor(226, 232, 240); // slate-200
-    doc.roundedRect(15, 85, 180, 55, 3, 3, 'D');
+    doc.roundedRect(15, 85, 180, 62, 3, 3, 'D');
 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
@@ -88,21 +103,31 @@ export async function GET(
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text('TOTAL RENDIMENTOS:', 25, 105);
-    doc.text(fmt(decl.totalRendimentosTributaveis), 85, 105);
+    doc.text('RENDIMENTOS TRIBUTAVEIS:', 25, 105);
+    doc.text(fmt(totalRendimentosResumo), 90, 105);
 
     doc.text('BASE DE CÁLCULO:', 25, 112);
-    doc.text(fmt(decl.baseCalculo), 85, 112);
+    doc.text(fmt(totalIRRF), 90, 112);
 
     doc.text('IMPOSTO DEVIDO:', 25, 119);
-    doc.text(fmt(decl.impostoDevido), 85, 119);
+    doc.text(fmt(totalDecimoTerceiro), 90, 119);
+    doc.setFillColor(248, 250, 252);
+    doc.rect(24, 108, 55, 14, 'F');
+    doc.text('IRRF:', 25, 112);
+    doc.text('13 SALARIO:', 25, 119);
 
     const resultado = Number(decl.impostoRestituir) > 0;
     doc.setFont('helvetica', 'bold');
-    doc.text(resultado ? 'SALDO A RESTITUIR:' : 'SALDO A PAGAR:', 25, 130);
+    doc.text('BASE DE CALCULO:', 25, 126);
+    doc.text(fmt(decl.baseCalculo), 90, 126);
+
+    doc.text('IMPOSTO DEVIDO:', 25, 133);
+    doc.text(fmt(decl.impostoDevido), 90, 133);
+
+    doc.text(resultado ? 'SALDO A RESTITUIR:' : 'SALDO A PAGAR:', 25, 143);
     if (resultado) doc.setTextColor(5, 150, 105); // emerald-600
     else doc.setTextColor(220, 38, 38); // red-600
-    doc.text(fmt(resultado ? decl.impostoRestituir : decl.impostoPagar), 85, 130);
+    doc.text(fmt(resultado ? decl.impostoRestituir : decl.impostoPagar), 90, 143);
     doc.setTextColor(0, 0, 0);
 
     // Status / Metadata
@@ -115,9 +140,13 @@ export async function GET(
     doc.text(decl.tipoDeclaracao.toUpperCase(), 165, 112);
     doc.text('MODELO:', 125, 119);
     doc.text(decl.modelo.toUpperCase(), 165, 119);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FONTES PJ:', 125, 126);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(decl.rendimentosTributaveis.length), 165, 126);
 
     // --- SECTIONS ---
-    let currentY = 155;
+    let currentY = 162;
 
     // 1. RENDIMENTOS TRIBUTÁVEIS
     doc.setFontSize(14);
@@ -300,4 +329,3 @@ export async function GET(
     return fail(msg, 500);
   }
 }
-

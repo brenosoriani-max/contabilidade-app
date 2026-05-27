@@ -1,9 +1,33 @@
 import axios, { AxiosError } from 'axios';
+import { mutate } from 'swr';
 import type { ApiResponse } from '@/types';
 
 export const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
+});
+
+const MUTATION_METHODS = new Set(['post', 'put', 'patch', 'delete']);
+
+api.interceptors.response.use((response) => {
+  const method = response.config.method?.toLowerCase();
+
+  if (method && MUTATION_METHODS.has(method)) {
+    void mutate(() => true);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('api:mutation', {
+          detail: {
+            method,
+            url: response.config.url,
+          },
+        })
+      );
+    }
+  }
+
+  return response;
 });
 
 export async function unwrap<T>(request: Promise<{ data: ApiResponse<T> }>) {
