@@ -164,12 +164,27 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const contribuinteId = Number.parseInt(id, 10);
+    if (Number.isNaN(contribuinteId)) {
+      return fail('ID invalido', 400);
+    }
 
-    await prisma.contribuinte.delete({
-      where: { id: Number.parseInt(id, 10) },
+    const result = await prisma.$transaction(async (tx) => {
+      const agendamentos = await tx.agendamento.deleteMany({
+        where: { contribuinteId },
+      });
+
+      await tx.contribuinte.delete({
+        where: { id: contribuinteId },
+      });
+
+      return agendamentos;
     });
 
-    return ok({ message: 'Contribuinte excluido com sucesso' });
+    return ok({
+      message: 'Contribuinte excluido com sucesso',
+      agendamentosExcluidos: result.count,
+    });
   } catch (error) {
     console.error('Erro ao excluir contribuinte:', error);
     return fail('Erro interno do servidor', 500);

@@ -150,7 +150,29 @@ interface Props {
   onDataRefresh?: () => void
 }
 
+type ViewerDocument = {
+  tag: string
+  fieldId?: string
+  nome_arquivo: string
+  tamanho_bytes: number
+  media_type: string
+  url: string | null
+  origem: string
+  recebido_em: string
+  confianca_extracao?: number
+}
+
 const ITEMS_PER_PAGE = 8
+
+const SCHEDULING_CHECKLIST_FIELD: Record<string, string> = {
+  "rg-cnh": "identificacao.rg",
+  cpf: "identificacao.cpf",
+  "comprovante-residencia": "endereco.logradouro",
+  "informe-rendimentos-empregador": "rendimentos.pj",
+  "informe-rendimentos-bancarios": "rendimentos.pj",
+  "extrato-previdencia-privada": "financeiro.extrato",
+  "carne-leao": "rendimentos.pj",
+}
 
 const TAGS = [
   "RG / CNH",
@@ -620,16 +642,7 @@ export const ContribuinteDetails = React.memo(
     const [exportando, setExportando] = useState(false)
     const [customTag, setCustomTag] = useState("")
     const [manualChecks, setManualChecks] = useState<Record<string, boolean>>({})
-    const [viewerDoc, setViewerDoc] = useState<null | {
-      tag: string
-      nome_arquivo: string
-      tamanho_bytes: number
-      media_type: string
-      url: string | null
-      origem: string
-      recebido_em: string
-      confianca_extracao?: number
-    }>(null)
+    const [viewerDoc, setViewerDoc] = useState<ViewerDocument | null>(null)
     const [isViewerMaximized, setIsViewerMaximized] = useState(false)
     const [finalizando, setFinalizando] = useState(false)
     const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false)
@@ -921,7 +934,7 @@ export const ContribuinteDetails = React.memo(
     const variation = (Number(declaration?.totalBensAtual) || 0) - (Number(declaration?.totalBensAnterior) || 0)
     const variationPercent = variation / (Number(declaration?.totalBensAnterior) || 1)
 
-    const getDocsForItem = useCallback(
+    const getDeclarationDocsForItem = useCallback(
       (fieldId: string) => {
         if (!declaration) return []
         const rawDataMeta = (declaration.rawData as any)?._meta
@@ -944,6 +957,104 @@ export const ContribuinteDetails = React.memo(
         )
       },
       [declaration]
+    )
+
+    const declarationDocuments = useMemo<ViewerDocument[]>(() => {
+      const seen = new Set<string>()
+      return [
+        "identificacao.cpf",
+        "identificacao.titulo_eleitor",
+        "identificacao.rg",
+        "endereco.logradouro",
+        "rendimentos.pj",
+        "financeiro.extrato",
+        "bens",
+      ].flatMap((fieldId) =>
+        getDeclarationDocsForItem(fieldId)
+          .map((doc) => ({
+            ...doc,
+            fieldId,
+            origem: doc.origem || "declaracao",
+            recebido_em: doc.recebido_em || declaration?.updatedAt || "",
+          }))
+          .filter((doc) => {
+            const key = `${doc.tag}-${doc.nome_arquivo}-${doc.url}`
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
+      )
+    }, [declaration?.updatedAt, getDeclarationDocsForItem])
+
+    const schedulingDocuments = useMemo<ViewerDocument[]>(
+      () =>
+        schedulingHistory.flatMap((scheduling) =>
+          scheduling.documents.map((document) => {
+            const checklistItem = scheduling.checklist.find(
+              (item) =>
+                item.id === document.checklistItemId ||
+                item.chave === document.checklistItemKey
+            )
+            const checklistKey = document.checklistItemKey ?? checklistItem?.chave ?? null
+            const fieldId = checklistKey
+              ? SCHEDULING_CHECKLIST_FIELD[checklistKey]
+              : undefined
+
+            return {
+              tag: checklistItem?.nome || checklistKey || "Agendamento",
+              fieldId,
+              nome_arquivo: document.nome,
+              tamanho_bytes: document.tamanhoBytes,
+              media_type: document.tipo || "application/octet-stream",
+              url: `/api/agendamentos/${scheduling.id}/documentos/${document.id}/view`,
+              origem: `agendamento ${formatDate(scheduling.dataAgendamento)}`,
+              recebido_em: document.createdAt,
+            }
+          })
+        ),
+      [schedulingHistory]
+    )
+
+    const allViewerDocuments = useMemo(() => {
+      const seen = new Set<string>()
+      return [...declarationDocuments, ...schedulingDocuments].filter((doc) => {
+        const key = doc.url || `${doc.tag}-${doc.nome_arquivo}-${doc.tamanho_bytes}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    }, [declarationDocuments, schedulingDocuments])
+
+    const normalizeTag = useCallback(
+      (value: string) =>
+        value
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim(),
+      []
+    )
+
+    const getDocsForItem = useCallback(
+      (fieldId: string) => {
+        const tagMapping: Record<string, string[]> = {
+          "identificacao.cpf": ["CPF"],
+          "identificacao.titulo_eleitor": ["Titulo de Eleitor", "TÃ­tulo de Eleitor"],
+          "identificacao.rg": ["RG / CNH"],
+          "endereco.logradouro": ["Comprovante de residencia", "Comprovante de residÃªncia"],
+          "rendimentos.pj": ["Informe de rendimentos", "Informe de rendimentos (empregador)", "Informe de rendimentos bancÃ¡rios", "Carne-leao", "CarnÃª-leÃ£o"],
+          "financeiro.extrato": ["Extrato bancario", "Extrato bancÃ¡rio", "Extrato de previdencia privada", "Extrato de previdÃªncia privada"],
+          "bens": ["Bens e Direitos", "Nota de corretagem", "IPTU", "Escritura", "CRLV", "Recibo de Aluguel"],
+        }
+        const tags = (tagMapping[fieldId] || []).map(normalizeTag)
+
+        return allViewerDocuments.filter((doc) => {
+          if (doc.fieldId === fieldId) return true
+          const docTag = normalizeTag(doc.tag || "")
+          return tags.some((tag) => docTag === tag || docTag.includes(tag) || tag.includes(docTag))
+        })
+      },
+      [allViewerDocuments, normalizeTag]
     )
 
     const cadastroItems = useMemo(
@@ -1064,7 +1175,7 @@ export const ContribuinteDetails = React.memo(
     }, [highlightedField])
 
     useEffect(() => {
-      if (activeTab !== "agendamentos" || !cpf) return
+      if (!["checklist", "documentos", "agendamentos"].includes(activeTab) || !cpf) return
       async function loadHistory() {
         setLoadingHistory(true)
         try {
