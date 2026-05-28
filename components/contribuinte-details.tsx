@@ -1279,6 +1279,24 @@ export const ContribuinteDetails = React.memo(
     const showVeiculo = bemForm.grupo === "02" && bemForm.codigo === "01"
     const showInst = ["03", "04", "06", "07"].includes(bemForm.grupo)
     const showCripto = bemForm.grupo === "08"
+    const saldoPagar = declaration?.saldoPagar ?? 0
+    const impostoRestituir = declaration?.impostoRestituir ?? 0
+
+    const hasSaldoPagar = saldoPagar > 0
+    const hasImpostoRestituir = impostoRestituir > 0
+
+    const irrfValue = hasSaldoPagar
+      ? saldoPagar
+      : hasImpostoRestituir
+        ? impostoRestituir
+        : 0
+
+    const irrfColor = hasSaldoPagar
+      ? "text-red-500"
+      : hasImpostoRestituir
+        ? "text-green-500"
+        : "text-blue-500"
+
 
     return (
       <div className="space-y-6">
@@ -1380,8 +1398,16 @@ export const ContribuinteDetails = React.memo(
           {declaration ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <StatCard title="Rendimentos" value={formatCurrency(declaration.totalRendPJ)} icon={<Landmark className="h-5 w-5" />} />
-              <StatCard title="IRRF" value={formatCurrency(declaration.totalIRRF)} icon={<Calculator className="h-5 w-5" />} />
-             <StatCard title="Patrimônio" value={formatCurrency(localTotalBensAtual)} icon={<Building2 className="h-5 w-5" />} />
+              <StatCard
+                title="IRRF"
+                value={
+                  <span className={irrfColor}>
+                    {formatCurrency(irrfValue)}
+                  </span>
+                }
+                icon={<Calculator className="h-5 w-5" />}
+              />             
+              <StatCard title="Patrimônio" value={formatCurrency(localTotalBensAtual)} icon={<Building2 className="h-5 w-5" />} />
               <StatCard
                 title="Variação"
                 value={`${localVariation >= 0 ? "+" : ""}${formatPercent(localVariationPercent)}`}
