@@ -1257,9 +1257,12 @@ export const ContribuinteDetails = React.memo(
       }
     }
 
+    const FINISHED_STATUSES = ["transmitida", "finalizada", "processada", "concluido"]
+    const isFinalized = FINISHED_STATUSES.includes(declaration?.situacao ?? "")
+
     async function handleFinalizar() {
       if (!declaracaoId || !declaration) return
-      const novaSituacao = declaration.situacao === "transmitida" ? "em_preenchimento" : "transmitida"
+      const novaSituacao = isFinalized ? "em_preenchimento" : "transmitida"
       setFinalizando(true)
       try {
         await declaracaoIrpfService.updateStatus(declaracaoId, novaSituacao)
@@ -1379,14 +1382,14 @@ export const ContribuinteDetails = React.memo(
 
                   {declaration && (
                     <Button 
-                      variant={declaration.situacao === "transmitida" ? "secondary" : "default"}
+                      variant={isFinalized ? "secondary" : "default"}
                       size="sm" 
                       className="h-9 rounded-xl font-black text-[10px] uppercase tracking-widest gap-2 shadow-lg shadow-primary/10"
                       onClick={() => setIsFinalizeDialogOpen(true)}
                       disabled={finalizando}
                     >
-                      {finalizando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : declaration.situacao === "transmitida" ? <X className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                      {declaration.situacao === "transmitida" ? "Reabrir Auditoria" : "Finalizar Auditoria"}
+                      {finalizando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isFinalized ? <X className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      {isFinalized ? "Reabrir Auditoria" : "Finalizar Auditoria"}
                     </Button>
                   )}
                 </div>
@@ -2336,10 +2339,10 @@ export const ContribuinteDetails = React.memo(
           <AlertDialogContent className="rounded-[2rem] border-primary/10 shadow-2xl overflow-hidden">
             <AlertDialogHeader className="p-8 pb-4">
               <AlertDialogTitle className="text-2xl font-black tracking-tight">
-                {declaration?.situacao === "transmitida" ? "Reabrir Auditoria?" : "Finalizar Auditoria?"}
+                {isFinalized ? "Reabrir Auditoria?" : "Finalizar Auditoria?"}
               </AlertDialogTitle>
               <AlertDialogDescription className="text-sm font-bold text-muted-foreground/70 leading-relaxed">
-                {declaration?.situacao === "transmitida" 
+                {isFinalized 
                   ? "Ao reabrir, você poderá editar todos os campos e documentos. O status da declaração voltará para 'Em Andamento'." 
                   : "Isso marcará o dossiê como concluído. O status da declaração mudará para 'Finalizada' na listagem geral."}
               </AlertDialogDescription>
